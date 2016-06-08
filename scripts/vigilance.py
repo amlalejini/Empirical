@@ -60,6 +60,7 @@ def get_source_without_comments(source_fname):
     return proc_lines
 
 
+bad_starts = ["#", "template", "constexpr"]
 def purge_unreachable_lines(lines):
     """
     function to eliminate non-code/unreachable lines
@@ -78,8 +79,10 @@ def purge_unreachable_lines(lines):
             relevant[index] = False
         elif ifdef_stack > 0:
             relevant[index] = False;
-        elif str.startswith(line, "#"):
-            relevant[index] = False
+        for bad in bad_starts:
+            if line.startswith(bad):
+                relevant[index] = False
+                break
 
         if str.startswith(line, "#endif"):
             ifdef_stack -= 1
