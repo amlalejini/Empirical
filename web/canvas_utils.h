@@ -14,10 +14,11 @@
 #ifndef EMP_WEB_CANVAS_UTILS_H
 #define EMP_WEB_CANVAS_UTILS_H
 
+#include <iostream>
 #include "Canvas.h"
 
 #include "../emtools/color_map.h"
-#include "../geometry/Circle2D.h"
+#include "../geometry/Shape2D.h"
 #include "../geometry/Surface2D.h"
 #include "../tools/BitMatrix.h"
 #include "../tools/vector.h"
@@ -26,7 +27,7 @@ namespace emp {
 namespace web {
 
   // Draw a Circle!
-  void Draw(Canvas canvas, const emp::Circle<> & circle,
+  void Draw(Canvas canvas, const emp::Circle & circle,
             const std::string & fill="",
             const std::string & line="")
   {
@@ -53,7 +54,7 @@ namespace web {
     }
   }
 
-  
+
   // Draw a Surface2D, specifying the full colormap to be used.
   template <typename BODY_TYPE>
   void Draw(Canvas canvas,
@@ -69,11 +70,12 @@ namespace web {
     canvas.Rect(0, 0, w, h, "black");
 
     // Draw the circles.
-    const auto & body_set = surface.GetConstBodySet();
+    const auto & body_set = surface.GetConstShapeSet();
     for (auto * body : body_set) {
       //canvas.Circle(body->GetPerimeter(), color_map[body->GetColorID()], "white");
-      canvas.Circle(body->GetPerimeter(), "", color_map[body->GetColorID()]);
+      //canvas.Circle(body->GetPerimeter(), "", color_map[body->GetColorID()]); <-- old
       //canvas.Circle(body->GetPerimeter(), "", "white");
+      canvas.Circle(*body, "", color_map[body->GetColorID()]);
     }
   }
 

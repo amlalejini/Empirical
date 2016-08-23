@@ -15,7 +15,7 @@
 //
 //    Canvas & Circle(double x, double y, double r,
 //                    const std::string & fc="", const std::string & lc="")
-//    Canvas & Circle(const emp::Circle<> & circle,
+//    Canvas & Circle(const emp::Circle & circle,
 //                    const std::string & fc="", const std::string & lc="")
 //    Canvas & Rect(double x, double y, double w, double h,
 //                    const std::string & fc="", const std::string & lc="")
@@ -31,7 +31,7 @@
 
 #include <string>
 
-#include "../geometry/Circle2D.h"
+#include "../geometry/Shape2D.h"
 #include "../tools/vector.h"
 
 #include "CanvasAction.h"
@@ -137,7 +137,7 @@ namespace web {
       Info()->AddAction( new CanvasCircle(x, y, r, fc, lc) );
       return *this;
     }
-    Canvas & Circle(const emp::Circle<> & circle,
+    Canvas & Circle(const emp::Circle & circle,
                     const std::string & fc="", const std::string & lc="") {
       Info()->AddAction( new CanvasCircle(circle, fc, lc) );
       return *this;
