@@ -58,7 +58,7 @@ namespace emp {
     Point<double> total_abs_shift;  // Total absolute-value of shifts (to calculate pressure)
 
     // TODO: body signals etc
-    Signal<Body2D_Base> on_collision_sig;
+    Signal<Body2D_Base*> on_collision_sig;
     Signal<> on_destruction_sig;
 
     Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0) { ; }
@@ -91,15 +91,51 @@ namespace emp {
       ~BodyLink() { ; }
     };
 
-    SHAPE_TYPE * shape_ptr; // circle, rectangle, etc.
+    using Shape_t = OwnedShape<SHAPE_TYPE, Body>;
+    Shape_t * shape_ptr; // circle, rectangle, etc.
     OWNER_TYPE * owner_ptr; // organism, resource, etc.
+    bool has_owner;
 
   public:
-
-    void AttachShape(SHAPE_TYPE * ptr) {
-      emp_assert(ptr != nullptr);
-      shape_ptr = ptr;
+    // TODO - QUESTION - When constructing body, require construction of shape as well?
+    template <typename... ARGS>
+    Body(ARGS... args) :
+      owner_ptr(nullptr),
+      has_owner(false)
+    {
+      std::cout << "Body Constructor. Not defining an owner." << std::endl;
+      shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
     }
+
+    template <typename... ARGS>
+    Body(OWNER_TYPE * o_ptr, ARGS... args) :
+      owner_ptr(o_ptr),
+      has_owner(true)
+    {
+      std::cout << "Body Constructor. Defining an owner. " << std::endl;
+      shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
+    }
+
+    const Shape_t * GetShapePtr() { return shape_ptr; }
+    Shape_t & GetShape() { return *shape_ptr; }
+    const Shape_t & GetConstShape() { return *shape_ptr; }
+
+    const OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
+    OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
+    const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
+
+    void AttachOwner(OWNER_TYPE * ptr) {
+      emp_assert(ptr != nullptr);
+      owner_ptr = ptr;
+      has_owner = true;
+    }
+    // TODO: alert owner that body is no longer attached? -- Probably.
+    void DetachOwner() {
+      owner_ptr = nullptr;
+      has_owner = false;
+    }
+
+
 
   };
 }
