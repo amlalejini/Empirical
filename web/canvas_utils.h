@@ -17,7 +17,6 @@
 #include <iostream>
 #include "Canvas.h"
 
-#include "../emtools/color_map.h"
 #include "../geometry/Shape2D.h"
 #include "../geometry/Surface2D.h"
 #include "../tools/BitMatrix.h"
