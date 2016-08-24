@@ -22,6 +22,7 @@
 #include "../geometry/Surface2D.h"
 #include "../tools/BitMatrix.h"
 #include "../tools/vector.h"
+#include "color_map.h"
 
 namespace emp {
 namespace web {
