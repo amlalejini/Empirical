@@ -32,6 +32,8 @@
 #include <iostream>
 #include <functional>
 
+// TODO: access to color ID of shape
+
 namespace emp {
   // TODO: Discuss the fate of BODY_LINK_TYPE. Should we still be using this? Or is there something
   //  better?
@@ -44,35 +46,6 @@ namespace emp {
   enum class BODY_LINK_TYPE { DEFAULT, REPRODUCTION, ATTACK, PARASITE, CONSUME_RESOURCE };
 
   class Body2D_Base {
-  protected:
-    // Body properties.
-    Point<double> velocity; // Speed and direction of movement.
-    double mass;
-    double inv_mass;
-    double pressure;
-    double max_pressure;
-
-    // Useful internal member variables.
-    Point<double> shift;            // How should this body be updated to minimize overlap?
-    Point<double> cum_shift;        // Build up of shift not yet acted upon.
-    Point<double> total_abs_shift;  // Total absolute-value of shifts (to calculate pressure)
-
-    // TODO: body signals etc
-    Signal<Body2D_Base*> on_collision_sig;
-    Signal<> on_destruction_sig;
-
-    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0) { ; }
-
-  public:
-    virtual ~Body2D_Base() { ; }
-
-
-
-  };
-
-  // Example: a body could be in the shape of a circle and be owned by a resource.
-  template<typename SHAPE_TYPE, typename OWNER_TYPE = std::nullptr_t>
-  class Body : public Body2D_Base {
   protected:
     struct BodyLink {
       using BODY_TYPE = Body2D_Base;
@@ -91,19 +64,162 @@ namespace emp {
       ~BodyLink() { ; }
     };
 
-    using Shape_t = OwnedShape<SHAPE_TYPE, Body>;
+    // Body properties.
+    Point<double> velocity; // Speed and direction of movement.
+    double mass;
+    double inv_mass;
+    double pressure;
+    double max_pressure;
+
+    // Useful internal member variables.
+    Point<double> shift;            // How should this body be updated to minimize overlap?
+    Point<double> cum_shift;        // Build up of shift not yet acted upon.
+    Point<double> total_abs_shift;  // Total absolute-value of shifts (to calculate pressure)
+
+    // TODO: body signals etc
+    Signal<Body2D_Base*> on_collision_sig;
+    Signal<> on_destruction_sig;
+
+    // Information about other bodies that this body is linked to.
+    emp::vector<BodyLink*> from_links;  // Active links initiated by body.
+    emp::vector<BodyLink*> to_links;    // Active links targeting body.
+
+    void RemoveFromLink(int link_id) {
+      emp_assert(link_id >= 0 && link_id < (int) from_links.size());
+      from_links[link_id] = from_links.back();
+      from_links.pop_back();
+    }
+    void RemoveToLink(int link_id) {
+      emp_assert(link_id >= 0 && link_id < (int) to_links.size());
+      to_links[link_id] = to_links.back();
+      to_links.pop_back();
+    }
+
+    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0) { ; }
+
+  public:
+    virtual ~Body2D_Base() {
+      std::cout << "Body2D_Base::~Body2D_Base" << std::endl;
+      // Remove any remaining links from this body.
+      while (from_links.size()) RemoveLink(from_links[0]);
+      while (to_links.size()) RemoveLink(to_links[0]);
+    }
+
+    virtual const Point<double> & GetVelocity() { return velocity; }
+    virtual double GetMass() const { return mass; }
+    virtual double GetInvMass() const { return inv_mass; }
+    virtual double GetPressure() const { return pressure; }
+    virtual double GetMaxPressure() const { return max_pressure; }
+
+    virtual void SetVelocity(double x, double y) { velocity.Set(x, y); }
+    virtual void SetVelocity(const Point<double> & v) { velocity = v; }
+    virtual void SetMass(double m) { mass = m; mass == 0.0 ? inv_mass = 0 : inv_mass = 1.0 / mass; }
+    virtual void SetPressure(double p) { pressure = p; }
+    virtual void SetMaxPressure(double mp) { max_pressure = mp; }
+
+    virtual void IncSpeed(const Point<double> & offset) { velocity += offset; }
+
+    // Shift to be applied.
+    virtual void AddShift(const Point<double> & s) { shift += s; total_abs_shift += s.Abs(); }
+
+    // Creating, testing, and unlinking other organisms.
+    virtual bool IsLinkedFrom(const Body2D_Base & link_body) const {
+      for (auto * cur_link : from_links) if (cur_link->to == &link_body) return true;
+      return false;
+    }
+    bool IsLinkedTo(const Body2D_Base & link_body) const { return link_body.IsLinkedFrom(*this); }
+    bool IsLinked(const Body2D_Base & link_body) const {
+      return IsLinkedFrom(link_body) || IsLinkedTo(link_body);
+    }
+    int GetLinkCount() const { return (int) (from_links.size() + to_links.size()); }
+
+    // Add link FROM this TO link_body.
+    void AddLink(BODY_LINK_TYPE type, Body2D_Base & link_body, double cur_dist, double target_dist, double link_strength = 0) {
+      emp_assert(!IsLinked(link_body));  // Don't link twice!
+
+      // Build connections in both directions.
+      auto * new_link = new BodyLink(type, this, &link_body, cur_dist, target_dist, link_strength);
+      from_links.push_back(new_link);
+      link_body.to_links.push_back(new_link);
+    }
+
+    void RemoveLink(BodyLink * link) {
+      if (link->to == this) {
+        link->from->RemoveLink(link);
+        return;
+      }
+      // Remove the FROM link.
+      for (int i = 0; i < (int) from_links.size(); i++) {
+        if (from_links[i]->to == link->to) { RemoveFromLink(i); break; }
+      }
+      // Remove the TO link.
+      const int to_size = (int) link->to->to_links.size();
+      for (int i = 0; i < to_size; i++) {
+        if (link->to->to_links[i]->from == this) { link->to->RemoveToLink(i); break; }
+      }
+      delete link;
+    }
+
+    const BodyLink & FindLink(const Body2D_Base & link_body) const {
+      emp_assert(IsLinked(link_body));
+      for (auto * link : from_links) if ( link->to == &link_body) return *link;
+      return link_body.FindLink(*this);
+    }
+
+    BodyLink & FindLink(Body2D_Base & link_body)  {
+      emp_assert(IsLinked(link_body));
+      for (auto * link : from_links) if ( link->to == &link_body) return *link;
+      return link_body.FindLink(*this);
+    }
+
+    emp::vector<BodyLink *> GetLinksToByType(BODY_LINK_TYPE link_type) {
+      emp::vector<BodyLink *> links;
+      for (auto *link : this->to_links) {
+        if (link->type == link_type) links.push_back(link);
+      }
+      return links;
+    }
+
+    emp::vector<BodyLink *> GetLinksFromByType(BODY_LINK_TYPE link_type) {
+      emp::vector<BodyLink *> links;
+      for (auto *link : this->from_links) {
+        if (link->type == link_type) links.push_back(link);
+      }
+      return links;
+    }
+
+    double GetLinkDist(const Body2D_Base & link_body) const {
+      emp_assert(IsLinked(link_body));
+      return FindLink(link_body).cur_dist;
+    }
+    double GetTargetLinkDist(const Body2D_Base & link_body) const {
+      emp_assert(IsLinked(link_body));
+      return FindLink(link_body).target_dist;
+    }
+    void ShiftLinkDist(Body2D_Base & link_body, double change) {
+      auto & link = FindLink(link_body);
+      link.cur_dist += change;
+    }
+
+  };
+
+  // Example: a body could be in the shape of a circle and be owned by a resource.
+  template<typename SHAPE_TYPE, typename OWNER_TYPE = std::nullptr_t>
+  class Body : public Body2D_Base {
+  protected:
+    using Shape_t = OwnedShape<SHAPE_TYPE, Body<SHAPE_TYPE, OWNER_TYPE>>;
     Shape_t * shape_ptr; // circle, rectangle, etc.
     OWNER_TYPE * owner_ptr; // organism, resource, etc.
     bool has_owner;
 
+
+
   public:
-    // TODO - QUESTION - When constructing body, require construction of shape as well?
     template <typename... ARGS>
     Body(ARGS... args) :
       owner_ptr(nullptr),
       has_owner(false)
     {
-      std::cout << "Body Constructor. Not defining an owner." << std::endl;
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
     }
 
@@ -112,17 +228,26 @@ namespace emp {
       owner_ptr(o_ptr),
       has_owner(true)
     {
-      std::cout << "Body Constructor. Defining an owner. " << std::endl;
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
     }
 
-    const Shape_t * GetShapePtr() { return shape_ptr; }
-    Shape_t & GetShape() { return *shape_ptr; }
-    const Shape_t & GetConstShape() { return *shape_ptr; }
+    ~Body() {
 
-    const OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
+    }
+
+    Shape_t * GetShapePtr() { return shape_ptr; }
+    Shape_t & GetShape() { return *shape_ptr; }
+    const Shape_t & GetConstShape() const { return *shape_ptr; }
+    OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
     OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
     const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
+
+    // TODO: configure body function?
+    // TODO: expose useful shape functions
+    const Angle & GetOrientation() const { return shape_ptr->GetOrientation(); }
+    const uint32_t GetColorID() const { return shape_ptr->GetColorID(); }
+
+    void SetColorID(uint32_t in_id) { shape_ptr->SetColorID(in_id); }
 
     void AttachOwner(OWNER_TYPE * ptr) {
       emp_assert(ptr != nullptr);
@@ -134,9 +259,6 @@ namespace emp {
       owner_ptr = nullptr;
       has_owner = false;
     }
-
-
-
   };
 }
 

@@ -16,7 +16,6 @@
 #include "Angle2D.h"
 
 namespace emp {
-
   // TODO: Move more functions that every shape should implement up to Shape.
   // Every shape should define a center and a radius from that center that
   // encompasses the entirety of the shape.

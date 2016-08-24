@@ -25,8 +25,17 @@
 
 namespace emp {
 
+  class Surface {
+  public:
+    virtual ~Surface() { ; }
+
+    virtual double GetWidth() const = 0;
+    virtual double GetHeight() const = 0;
+
+  };
+
   template <typename SHAPE_TYPE>
-  class Surface2D {
+  class Surface2D : public Surface {
   private:
     const Point<double> max_pos;        // Lower-left corner of the surface.
     emp::vector<SHAPE_TYPE *> shape_set;  // Set of all bodies on surface
@@ -35,11 +44,14 @@ namespace emp {
     Surface2D(double _width, double _height, double surface_friction = 0.00125)
       : max_pos(_width, _height),
         friction(surface_friction)
-    { ; }
-    ~Surface2D() { Clear(); }
+    { std::cout << "Surface2D::Constructor" << std::endl; }
+    ~Surface2D() {
+      std::cout << "Surface2D::~Surface2D" << std::endl;
+      Clear();
+    }
 
-    double GetWidth() const { return max_pos.GetX(); }
-    double GetHeight() const { return max_pos.GetY(); }
+    double GetWidth() const override { return max_pos.GetX(); }
+    double GetHeight() const override { return max_pos.GetY(); }
     double GetFriction() const { return friction; }
     const Point<double> & GetMaxPosition() const { return max_pos; }
 
