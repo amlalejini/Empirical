@@ -127,14 +127,14 @@ namespace emp {
       for (auto * cur_link : from_links) if (cur_link->to == &link_body) return true;
       return false;
     }
-    bool IsLinkedTo(const Body2D_Base & link_body) const { return link_body.IsLinkedFrom(*this); }
-    bool IsLinked(const Body2D_Base & link_body) const {
+    virtual bool IsLinkedTo(const Body2D_Base & link_body) const { return link_body.IsLinkedFrom(*this); }
+    virtual bool IsLinked(const Body2D_Base & link_body) const {
       return IsLinkedFrom(link_body) || IsLinkedTo(link_body);
     }
-    int GetLinkCount() const { return (int) (from_links.size() + to_links.size()); }
+    virtual int GetLinkCount() const { return (int) (from_links.size() + to_links.size()); }
 
     // Add link FROM this TO link_body.
-    void AddLink(BODY_LINK_TYPE type, Body2D_Base & link_body, double cur_dist, double target_dist, double link_strength = 0) {
+    virtual void AddLink(BODY_LINK_TYPE type, Body2D_Base & link_body, double cur_dist, double target_dist, double link_strength = 0) {
       emp_assert(!IsLinked(link_body));  // Don't link twice!
 
       // Build connections in both directions.
@@ -143,7 +143,7 @@ namespace emp {
       link_body.to_links.push_back(new_link);
     }
 
-    void RemoveLink(BodyLink * link) {
+    virtual void RemoveLink(BodyLink * link) {
       if (link->to == this) {
         link->from->RemoveLink(link);
         return;
@@ -160,19 +160,19 @@ namespace emp {
       delete link;
     }
 
-    const BodyLink & FindLink(const Body2D_Base & link_body) const {
+    virtual const BodyLink & FindLink(const Body2D_Base & link_body) const {
       emp_assert(IsLinked(link_body));
       for (auto * link : from_links) if ( link->to == &link_body) return *link;
       return link_body.FindLink(*this);
     }
 
-    BodyLink & FindLink(Body2D_Base & link_body)  {
+    virtual BodyLink & FindLink(Body2D_Base & link_body)  {
       emp_assert(IsLinked(link_body));
       for (auto * link : from_links) if ( link->to == &link_body) return *link;
       return link_body.FindLink(*this);
     }
 
-    emp::vector<BodyLink *> GetLinksToByType(BODY_LINK_TYPE link_type) {
+    virtual emp::vector<BodyLink *> GetLinksToByType(BODY_LINK_TYPE link_type) {
       emp::vector<BodyLink *> links;
       for (auto *link : this->to_links) {
         if (link->type == link_type) links.push_back(link);
@@ -180,7 +180,7 @@ namespace emp {
       return links;
     }
 
-    emp::vector<BodyLink *> GetLinksFromByType(BODY_LINK_TYPE link_type) {
+    virtual emp::vector<BodyLink *> GetLinksFromByType(BODY_LINK_TYPE link_type) {
       emp::vector<BodyLink *> links;
       for (auto *link : this->from_links) {
         if (link->type == link_type) links.push_back(link);
@@ -188,15 +188,15 @@ namespace emp {
       return links;
     }
 
-    double GetLinkDist(const Body2D_Base & link_body) const {
+    virtual double GetLinkDist(const Body2D_Base & link_body) const {
       emp_assert(IsLinked(link_body));
       return FindLink(link_body).cur_dist;
     }
-    double GetTargetLinkDist(const Body2D_Base & link_body) const {
+    virtual double GetTargetLinkDist(const Body2D_Base & link_body) const {
       emp_assert(IsLinked(link_body));
       return FindLink(link_body).target_dist;
     }
-    void ShiftLinkDist(Body2D_Base & link_body, double change) {
+    virtual void ShiftLinkDist(Body2D_Base & link_body, double change) {
       auto & link = FindLink(link_body);
       link.cur_dist += change;
     }
