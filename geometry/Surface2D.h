@@ -45,10 +45,9 @@ namespace emp {
     Surface2D(double _width, double _height, double surface_friction = 0.00125)
       : max_pos(_width, _height),
         friction(surface_friction)
-    { std::cout << "Surface2D::Constructor" << std::endl; }
+    { ; }
     // TODO: look into this 'throw()'; why needed?
     ~Surface2D() throw() {
-      std::cout << "Surface2D::~Surface2D" << std::endl;
       Clear();
     }
 

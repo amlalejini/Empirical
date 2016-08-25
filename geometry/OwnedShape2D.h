@@ -24,18 +24,16 @@ namespace emp {
       SHAPE_TYPE(std::forward<ARGS>(args)...),
       owner_ptr(nullptr),
       has_owner(false)
-    { std::cout << "OwnedShape::Constructor(No Owner, ...)" << std::endl; }
+    { ; }
 
     template<typename... ARGS>
     OwnedShape(OWNER_TYPE * o_ptr, ARGS... args) :
       SHAPE_TYPE(std::forward<ARGS>(args)...),
       owner_ptr(o_ptr),
       has_owner(true)
-    { std::cout << "OwnedShape::Constructor(Owner, ...)" << std::endl; }
+    { ; }
 
-    ~OwnedShape() {
-      std::cout << "OwnedShape::~OwnedShape" << std::endl;
-    }
+    ~OwnedShape() { ; }
 
     OWNER_TYPE * GetOwnerPtr() { return owner_ptr; }
     OWNER_TYPE & GetOwner() { return *owner_ptr; }

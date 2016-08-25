@@ -71,13 +71,12 @@ namespace emp {
     double pressure;
     double max_pressure;
     bool destroy;           // Should whoever is responsible for this memory destroy this body?
-
+    bool is_colliding;
     // Useful internal member variables.
     Point<double> shift;            // How should this body be updated to minimize overlap?
     Point<double> cum_shift;        // Build up of shift not yet acted upon.
     Point<double> total_abs_shift;  // Total absolute-value of shifts (to calculate pressure)
 
-    // TODO: body signals etc
     Signal<Body2D_Base*> on_collision_sig;
     Signal<> on_destruction_sig;
 
@@ -100,18 +99,21 @@ namespace emp {
 
   public:
     virtual ~Body2D_Base() {
-      std::cout << "Body2D_Base::~Body2D_Base" << std::endl;
       // Remove any remaining links from this body.
       while (from_links.size()) RemoveLink(from_links[0]);
       while (to_links.size()) RemoveLink(to_links[0]);
     }
 
-    virtual const Point<double> & GetVelocity() { return velocity; }
+    virtual Shape * GetShapePtr() { return nullptr; }
+
+    virtual const Point<double> & GetVelocity() const { return velocity; }
+    virtual const Point<double> & GetAnchor() const = 0;
     virtual double GetMass() const { return mass; }
     virtual double GetInvMass() const { return inv_mass; }
     virtual double GetPressure() const { return pressure; }
     virtual double GetMaxPressure() const { return max_pressure; }
     virtual bool GetDestroyFlag() const { return destroy; }
+    virtual bool ExceedsStressThreshold() const { return pressure > max_pressure; }
 
     virtual void SetVelocity(double x, double y) { velocity.Set(x, y); }
     virtual void SetVelocity(const Point<double> & v) { velocity = v; }
@@ -121,9 +123,22 @@ namespace emp {
     virtual void MarkForDestruction() { destroy = true; }
 
     virtual void IncSpeed(const Point<double> & offset) { velocity += offset; }
-
+    virtual void DecSpeed(const Point<double> & offset) { velocity -= offset; }
     // Shift to be applied.
     virtual void AddShift(const Point<double> & s) { shift += s; total_abs_shift += s.Abs(); }
+
+    virtual void ResolveCollision() { is_colliding = true; }
+    virtual void TriggerCollision(Body2D_Base *other_body) {
+      is_colliding = true;
+      on_collision_sig.Trigger(other_body);
+    }
+
+    virtual void RegisterOnCollisionCallback(std::function<void(Body2D_Base*)> callback) {
+      on_collision_sig.AddAction(callback);
+    }
+    virtual void RegisterOnDestructionCallback(std::function<void()> callback) {
+      on_destruction_sig.AddAction(callback);
+    }
 
     // Creating, testing, and unlinking other organisms.
     virtual bool IsLinkedFrom(const Body2D_Base & link_body) const {
@@ -225,6 +240,7 @@ namespace emp {
       has_owner(false)
     {
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
+      target_body_size = shape_ptr->GetRadius();
     }
 
     template <typename... ARGS>
@@ -233,11 +249,14 @@ namespace emp {
       has_owner(true)
     {
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
+      target_body_size = shape_ptr->GetRadius();
     }
 
-    ~Body() { ; }
+    ~Body() {
+      if (has_owner) owner_ptr->DetachBody();
+    }
 
-    Shape_t * GetShapePtr() { return shape_ptr; }
+    Shape_t * GetShapePtr() override { return shape_ptr; }
     Shape_t & GetShape() { return *shape_ptr; }
     const Shape_t & GetConstShape() const { return *shape_ptr; }
     OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
@@ -247,6 +266,7 @@ namespace emp {
     // TODO: configure body function?
     // TODO: expose useful shape functions
     const Angle & GetOrientation() const { return shape_ptr->GetOrientation(); }
+    const Point<double> & GetAnchor() const override { return shape_ptr->GetCenter(); }
     const uint32_t GetColorID() const { return shape_ptr->GetColorID(); }
 
     void SetColorID(uint32_t in_id) { shape_ptr->SetColorID(in_id); }
@@ -270,42 +290,88 @@ namespace emp {
       auto cur_size = shape_ptr->GetRadius();
       if (target_body_size > cur_size) {
         // If change is within factor, just make the change. Otherwise, change by change factor.
-        double targ_dist = target_size - target_body_size;
+        double targ_dist = target_body_size - cur_size;
         if (targ_dist < change_factor) shape_ptr->SetRadius(target_body_size);
         else shape_ptr->SetRadius(cur_size + change_factor);
       } else if (target_body_size < cur_size) {
-        double targ_dist = target_body_size - target_size;
+        double targ_dist = cur_size - target_body_size;
         if (targ_dist < change_factor) shape_ptr->SetRadius(target_body_size);
         else shape_ptr->SetRadius(cur_size - change_factor);
       }
-    }
 
-    // Update links.
-    for (int i = 0; i < (int) from_links.size(); i++) {
-      auto * link = from_links[i];
-      // Here's where we should sever REPRO links.
-      if (link->cur_dist == link->target_dist) continue;  // No adjustment needed.
-      // If we're within the change_factor, just set the pair_dist to target.
-      if (std::abs(link->cur_dist - link->target_dist) <= change_factor) {
-          link->cur_dist = link->target_dist;
-      } else {
-        if (link->cur_dist < link->target_dist) link->cur_dist += change_factor;
-        else link->cur_dist -= change_factor;
+      // Update links.
+      for (int i = 0; i < (int) from_links.size(); i++) {
+        auto * link = from_links[i];
+        // Here's where we should sever REPRO links.
+        if (link->cur_dist == link->target_dist) continue;  // No adjustment needed.
+        // If we're within the change_factor, just set the pair_dist to target.
+        if (std::abs(link->cur_dist - link->target_dist) <= change_factor) {
+            link->cur_dist = link->target_dist;
+        } else {
+          if (link->cur_dist < link->target_dist) link->cur_dist += change_factor;
+          else link->cur_dist -= change_factor;
+        }
+      }
+
+      // Move body by its velocity and reduce velocity based on friction.
+      if (velocity.NonZero()) {
+        shape_ptr->Translate(velocity);
+        const double velocity_mag = velocity.Magnitude();
+        // If body is close to stopping, stop it!
+        if (friction > velocity_mag) velocity.ToOrigin();
+        else velocity *= 1.0 - ((double) friction) / ((double) velocity_mag);
       }
     }
 
-    // Move body by its velocity and reduce velocity based on friction.
-    if (velocity.NonZero()) {
-      shape_ptr->Translate(velocity);
-      const double velocity_mag = velocity.Magnitude();
-      // If body is close to stopping, stop it!
-      if (friction > velocity_mag) velocity.ToOrigin();
-      else velocity *= 1.0 - ((double) friction) / ((double) velocity_mag);
+    void FinalizePosition(const Point<double> & max_coords) {
+      const double max_x = max_coords.GetX() - shape_ptr->GetRadius();
+      const double max_y = max_coords.GetY() - shape_ptr->GetRadius();
+
+      cum_shift += shift;
+      if (cum_shift.SquareMagnitude() > 0.25) {
+        shape_ptr->Translate(cum_shift);
+        cum_shift.ToOrigin();
+      }
+      // TODO: update calculation for pressure.
+      pressure = (total_abs_shift - shift.Abs()).SquareMagnitude();
+      shift.ToOrigin();
+      total_abs_shift.ToOrigin();
+
+      // If this body is linked to another, enforce the distance between them.
+      for (auto * link : from_links) {
+        if (GetAnchor() == link->to->GetAnchor()) {
+          std::cout << "Link's anchor: " << link->to->GetAnchor() << std::endl;
+          shape_ptr->Translate(Point<double>(0.01, 0.01));
+        }
+        // Figure out how much each oragnism should move so that they will be properly spaced.
+        const double start_dist = GetAnchor().Distance(link->to->GetAnchor());
+        const double link_dist = link->cur_dist;
+        const double frac_change = (1.0 - ((double) link_dist) / ((double) start_dist)) / 2.0;
+
+        Point<double> dist_move = (GetAnchor() - link->to->GetAnchor()) * frac_change;
+        shape_ptr->Translate(-dist_move);
+        link->to->GetShapePtr()->Translate(dist_move);
+      }
+
+      // Adjust the organism so it stays within the bounding box of the world.
+      if (shape_ptr->GetCenterX() < shape_ptr->GetRadius()) {
+        shape_ptr->SetCenterX(shape_ptr->GetRadius());
+        velocity.NegateX();
+      } else if (shape_ptr->GetCenterX() > max_x) {
+        shape_ptr->SetCenterX(max_x);
+        velocity.NegateX();
+      }
+      if (shape_ptr->GetCenterY() < shape_ptr->GetRadius()) {
+        shape_ptr->SetCenterY(shape_ptr->GetRadius());
+        velocity.NegateY();
+      } else if (shape_ptr->GetCenterY() > max_y) {
+        shape_ptr->SetCenterY(max_y);
+        velocity.NegateY();
+      }
     }
 
-  }
-
   };
+
 }
 
 #endif

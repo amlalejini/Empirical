@@ -22,6 +22,9 @@
 #include "tools/functions.h"
 #include "tools/meta.h"
 
+#include "web/Canvas.h"
+#include "web/canvas_utils.h"
+
 #include <vector>
 #include <tuple>
 #include <utility>
@@ -51,9 +54,30 @@ namespace emp {
       Point<double> *max_pos;       // Max position across all surfaces.
       bool configured;              // Have the physics been configured yet?
       emp::Random *random_ptr;
+      double max_radius;
 
       Signal<Body2D_Base *, Body2D_Base *> on_collision_sig;
       Signal<> on_update_sig;
+
+      bool CollideBodies(Body2D_Base * body1, Body2D_Base * body2) {
+        // If bodies are linked, no collision.
+        if (body1->IsLinked(*body2)) return false;
+        // Body-touching math.
+        Point<double> dist = body1->GetShapePtr()->GetCenter() - body2->GetShapePtr()->GetCenter();
+        double sq_pair_dist = dist.SquareMagnitude();
+        const double radius_sum = body1->GetShapePtr()->GetRadius() + body2->GetShapePtr()->GetRadius();
+        const double sq_min_dist = radius_sum * radius_sum;
+        // If bodies aren't touching, no collision.
+        if (sq_pair_dist >= sq_min_dist) return false;
+        // Collision!
+        body1->TriggerCollision(body2);
+        body2->TriggerCollision(body1);
+        on_collision_sig.Trigger(body1, body2);
+
+
+        return false;
+
+      }
 
       // TODO: clean up template-meta programming stuff to have _imp versions and public versions.
       // Template meta-programming magic to build surface set.
@@ -84,35 +108,23 @@ namespace emp {
           FindSurfaceApplyFun<BODY_TYPE, MORE_TYPES...>(in_body, fun, ++i);
       }
 
-      // This doesn't do what I want becuas FIRST type is figured out via type deduction.
-      // template <typename FIRST_TYPE>
-      // void LoopSurfacesApplyFun(std::function<void(Surface2D<OwnedShape<Circle, FIRST_TYPE>>*)> fun, int i = 0) {
-      //   fun(static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]));
-      // }
-      // template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
-      // void LoopSurfacesApplyFun(std::function<void(Surface2D<OwnedShape<Circle, FIRST_TYPE>>*)> fun, int i = 0) {
-      //   LoopSurfacesApplyFun<FIRST_TYPE>(fun, i);
-      //   LoopSurfacesApplyFun<SECOND_TYPE, MORE_TYPES...>(fun, ++i);
-      // }
       template <typename FIRST_TYPE>
       void UpdateSurfaceBodies(int i = 0) {
-        std::cout << "Updating bodies on surface: " << i << std::endl;
         auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
         auto & surface_shapes = surface->GetShapeSet();
         int cur_size = (int) surface_shapes.size();
         int cur_id = 0;
-        std::cout << " - Num bodies to update: " << cur_size << std::endl;
         while (cur_id < cur_size) {
           emp_assert(surface_shapes[cur_id] != nullptr && surface_shapes[cur_id].HasOwner());
-          std::cout << "   * Looking at a shape!" << std::endl;
           if (surface_shapes[cur_id]->GetOwnerPtr()->GetDestroyFlag()) {
-            std::cout << "   * Deleting a shape." << std::endl;
             delete surface_shapes[cur_id]->GetOwnerPtr(); // Delete the body.
             delete surface_shapes[cur_id];                // Delete the shape.
             cur_size--;
             surface_shapes[cur_id] = surface_shapes[cur_size];
           } else {
-            surface_shapes[cur_id]->GetOwnerPtr()->BodyUpdate();
+            surface_shapes[cur_id]->GetOwnerPtr()->BodyUpdate(0.0015, 0.25); // TODO: get rid of magic numbers (friction, change_rate)
+            if (surface_shapes[cur_id]->GetRadius() > max_radius)
+              max_radius = surface_shapes[cur_id]->GetRadius();
             cur_id++;
           }
         }
@@ -122,6 +134,88 @@ namespace emp {
       void UpdateSurfaceBodies(int i = 0) {
         UpdateSurfaceBodies<FIRST_TYPE>(i);
         UpdateSurfaceBodies<SECOND_TYPE, MORE_TYPES...>(++i);
+      }
+
+      template <typename FIRST_TYPE>
+      void FinalizeSurfaceBodies(int i = 0) {
+        auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
+        auto & surface_shapes = surface->GetShapeSet();
+        int cur_size = (int) surface_shapes.size();
+        int cur_id = 0;
+        while (cur_id < cur_size) {
+          emp_assert(surface_shapes[cur_id] != nullptr && surface_shapes[cur_id].HasOwner());
+          if (surface_shapes[cur_id]->GetOwnerPtr()->GetDestroyFlag() ||
+              surface_shapes[cur_id]->GetOwnerPtr()->ExceedsStressThreshold()) {
+            delete surface_shapes[cur_id]->GetOwnerPtr(); // Delete the body.
+            delete surface_shapes[cur_id];                // Delete the shape.
+            cur_size--;
+            surface_shapes[cur_id] = surface_shapes[cur_size];
+          } else {
+            surface_shapes[cur_id]->GetOwnerPtr()->FinalizePosition(*max_pos);
+            cur_id++;
+          }
+        }
+        surface_shapes.resize(cur_size);
+      }
+      template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
+      void FinalizeSurfaceBodies(int i = 0) {
+        FinalizeSurfaceBodies<FIRST_TYPE>(i);
+        FinalizeSurfaceBodies<SECOND_TYPE, MORE_TYPES...>(++i);
+      }
+
+      // Test for collisions in *this* physics.
+      template <typename FIRST_TYPE>
+      void TestCollisions(const int num_cols, const int num_rows, const int max_col, const int max_row,
+                          const int num_sectors, const double sector_width, const double sector_height,
+                          emp::vector<emp::vector<Body2D_Base *>> & sector_set, int i = 0) {
+        // Calculate number of sectors to use (currently no more than 1024).
+        auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
+        auto & surface_shapes = surface->GetShapeSet();
+        for (auto *shape : surface_shapes) {
+          emp_assert(shape != nullptr);
+          // Determine which sector the current body is in.
+          const int cur_col = emp::to_range<int>(shape->GetCenter().GetX()/sector_width, 0, max_col);
+          const int cur_row = emp::to_range<int>(shape->GetCenter().GetY()/sector_height, 0, max_row);
+          // See if this body may collide with any of the bodies previously put into sectors.
+          for (int k = std::max(0, cur_col-1); k <= std::min(cur_col+1, max_col); k++) {
+            for (int j = std::max(0, cur_row-1); j <= std::min(cur_row+1, max_row); j++) {
+              const int sector_id = k + num_cols * j;
+              if (sector_set[sector_id].size() == 0) continue; // no need to test this body with nothing!
+              for (auto *body2 : sector_set[sector_id]) {
+                CollideBodies(shape->GetOwnerPtr(), body2);
+              }
+            }
+          }
+          // Add this body to the current sector for future collision tests.
+          const int cur_sector = cur_col + cur_row * num_cols;
+          emp_assert(cur_sector < (int) sector_set.size());
+          sector_set[cur_sector].push_back(shape->GetOwnerPtr());
+        }
+
+      }
+      template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
+      void TestCollisions(const int num_cols, const int num_rows, const int max_col, const int max_row,
+                          const int num_sectors, const double sector_width, const double sector_height,
+                          emp::vector<emp::vector<Body2D_Base *>> & sector_set, int i = 0) {
+
+        TestCollisions<FIRST_TYPE>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
+                                   sector_height, sector_set, i);
+        TestCollisions<SECOND_TYPE, MORE_TYPES...>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
+                                   sector_height, sector_set, ++i);
+      }
+
+      template <typename FIRST_TYPE>
+      void DrawOnCanvasImpl(web::Canvas canvas, const emp::vector<std::string> & color_map, int i = 0) {
+        auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
+        auto & surface_shapes = surface->GetShapeSet();
+        for (auto * shape : surface_shapes) {
+          canvas.Circle(*shape, "", color_map[shape->GetColorID()]);
+        }
+      }
+      template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
+      void DrawOnCanvasImpl(web::Canvas canvas, const emp::vector<std::string> & color_map, int i = 0) {
+        DrawOnCanvasImpl<FIRST_TYPE>(canvas, color_map, i);
+        DrawOnCanvasImpl<SECOND_TYPE, MORE_TYPES...>(canvas, color_map, ++i);
       }
 
     public:
@@ -196,19 +290,39 @@ namespace emp {
         return *this;
       }
 
-      // Test for collisions in *this* physics.
-      void TestCollisions() {
-
-      }
-
       // Progress physics by a single time step.
       void Update() {
         emp_assert(configured);
-        std::cout << "Physics update." << std::endl;
         on_update_sig.Trigger();
-
+        // Reset max_radius.
+        max_radius = 0.0;
         // Update all bodies. Remove those marked for removal.
         UpdateSurfaceBodies<BODY_TYPES...>();
+        // Test for collisions.
+        //  - If nothing exists, no need to test for collisions.
+        if (max_radius > 0.0) { // TODO: wrap this up in a TestCollisions function (hide all of the grossness).
+          const int num_cols = std::min<int>(GetWidth() / (max_radius * 2.0), 32);
+          const int num_rows = std::min<int>(GetHeight() / (max_radius * 2.0), 32);
+          const int max_col = num_cols - 1;
+          const int max_row = num_rows - 1;
+          const int num_sectors = num_cols * num_rows;
+          // Calculate sector size.
+          const double sector_width = GetWidth() / (double) num_cols;
+          const double sector_height = GetHeight() / (double) num_rows;
+          emp::vector<emp::vector<Body2D_Base *>> sector_set(num_sectors);
+
+          TestCollisions<BODY_TYPES...>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
+                                     sector_height, sector_set);
+        }
+        // Finalize positions and test for stress-induced removal.
+        FinalizeSurfaceBodies<BODY_TYPES...>();
+      }
+
+      // TODO: move this out of physics eventually
+      void DrawOnCanvas(web::Canvas canvas, const emp::vector<std::string> & color_map) {
+        canvas.Clear();
+        canvas.Rect(0, 0, max_pos->GetX(), max_pos->GetY(), "black");
+        DrawOnCanvasImpl<BODY_TYPES...>(canvas, color_map);
       }
 
   };
