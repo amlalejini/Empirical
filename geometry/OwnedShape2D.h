@@ -40,6 +40,7 @@ namespace emp {
     OWNER_TYPE * GetOwnerPtr() { return owner_ptr; }
     OWNER_TYPE & GetOwner() { return *owner_ptr; }
     const OWNER_TYPE & GetConstOwner() const { return *owner_ptr; }
+    bool HasOwner() const { return has_owner; }
 
     void AttachOwner(OWNER_TYPE * ptr) {
       emp_assert(ptr != nullptr);

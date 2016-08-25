@@ -45,6 +45,7 @@ namespace emp {
     virtual Shape & SetCenterY(double new_y) { center.SetY(new_y); return *this; }
     virtual Shape & SetRadius(double new_radius) { radius = new_radius; return *this; }
     virtual Shape & SetOrientation(Angle new_orientation) { orientation = new_orientation; return *this; }
+    virtual Shape & Translate(Point<double> shift) { center += shift; return *this; }
 
     uint32_t GetColorID() const { return color_id; }
 
@@ -66,8 +67,7 @@ namespace emp {
     Circle & SetCenterY(double new_y) override { center.SetY(new_y); return *this; }
     Circle & SetRadius(double new_radius) override { radius = new_radius; return *this; }
     Circle & SetOrientation(Angle new_orientation) override { orientation = new_orientation; return *this; }
-
-    Circle & Translate(Point<double> shift) { center += shift; return *this; }
+    Circle & Translate(Point<double> shift) override { center += shift; return *this; }
 
     bool Contains(const Point<double> & point) const {
       return center.SquareDistance(point) < GetSquareRadius();

@@ -70,6 +70,7 @@ namespace emp {
     double inv_mass;
     double pressure;
     double max_pressure;
+    bool destroy;           // Should whoever is responsible for this memory destroy this body?
 
     // Useful internal member variables.
     Point<double> shift;            // How should this body be updated to minimize overlap?
@@ -95,7 +96,7 @@ namespace emp {
       to_links.pop_back();
     }
 
-    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0) { ; }
+    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0), destroy(false) { ; }
 
   public:
     virtual ~Body2D_Base() {
@@ -110,12 +111,14 @@ namespace emp {
     virtual double GetInvMass() const { return inv_mass; }
     virtual double GetPressure() const { return pressure; }
     virtual double GetMaxPressure() const { return max_pressure; }
+    virtual bool GetDestroyFlag() const { return destroy; }
 
     virtual void SetVelocity(double x, double y) { velocity.Set(x, y); }
     virtual void SetVelocity(const Point<double> & v) { velocity = v; }
     virtual void SetMass(double m) { mass = m; mass == 0.0 ? inv_mass = 0 : inv_mass = 1.0 / mass; }
     virtual void SetPressure(double p) { pressure = p; }
     virtual void SetMaxPressure(double mp) { max_pressure = mp; }
+    virtual void MarkForDestruction() { destroy = true; }
 
     virtual void IncSpeed(const Point<double> & offset) { velocity += offset; }
 
@@ -212,7 +215,8 @@ namespace emp {
     OWNER_TYPE * owner_ptr; // organism, resource, etc.
     bool has_owner;
 
-
+    // TODO; register update signal for body size; when SetSize is called, update this variable.
+    double target_body_size;   // Means different things to different shapes.
 
   public:
     template <typename... ARGS>
@@ -231,9 +235,7 @@ namespace emp {
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
     }
 
-    ~Body() {
-
-    }
+    ~Body() { ; }
 
     Shape_t * GetShapePtr() { return shape_ptr; }
     Shape_t & GetShape() { return *shape_ptr; }
@@ -259,6 +261,50 @@ namespace emp {
       owner_ptr = nullptr;
       has_owner = false;
     }
+
+    // TODO: we'll actually want CircleBody<OwnerType> because of these body updates.
+    // TODO: this may need to be tuned to be more generic.
+    // TODO: add allowable error thresholds. == on doubles is never going to be right.
+    void BodyUpdate(double friction, double change_factor) {
+      // Grow and shrink as needed.
+      auto cur_size = shape_ptr->GetRadius();
+      if (target_body_size > cur_size) {
+        // If change is within factor, just make the change. Otherwise, change by change factor.
+        double targ_dist = target_size - target_body_size;
+        if (targ_dist < change_factor) shape_ptr->SetRadius(target_body_size);
+        else shape_ptr->SetRadius(cur_size + change_factor);
+      } else if (target_body_size < cur_size) {
+        double targ_dist = target_body_size - target_size;
+        if (targ_dist < change_factor) shape_ptr->SetRadius(target_body_size);
+        else shape_ptr->SetRadius(cur_size - change_factor);
+      }
+    }
+
+    // Update links.
+    for (int i = 0; i < (int) from_links.size(); i++) {
+      auto * link = from_links[i];
+      // Here's where we should sever REPRO links.
+      if (link->cur_dist == link->target_dist) continue;  // No adjustment needed.
+      // If we're within the change_factor, just set the pair_dist to target.
+      if (std::abs(link->cur_dist - link->target_dist) <= change_factor) {
+          link->cur_dist = link->target_dist;
+      } else {
+        if (link->cur_dist < link->target_dist) link->cur_dist += change_factor;
+        else link->cur_dist -= change_factor;
+      }
+    }
+
+    // Move body by its velocity and reduce velocity based on friction.
+    if (velocity.NonZero()) {
+      shape_ptr->Translate(velocity);
+      const double velocity_mag = velocity.Magnitude();
+      // If body is close to stopping, stop it!
+      if (friction > velocity_mag) velocity.ToOrigin();
+      else velocity *= 1.0 - ((double) friction) / ((double) velocity_mag);
+    }
+
+  }
+
   };
 }
 

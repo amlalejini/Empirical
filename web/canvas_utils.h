@@ -56,9 +56,9 @@ namespace web {
 
 
   // Draw a Surface2D, specifying the full colormap to be used.
-  template <typename BODY_TYPE>
+  template <typename SHAPE_TYPE>
   void Draw(Canvas canvas,
-            const Surface2D<BODY_TYPE> & surface,
+            const Surface2D<SHAPE_TYPE> & surface,
             const emp::vector<std::string> & color_map)
   {
     canvas.Clear();
@@ -70,18 +70,15 @@ namespace web {
     canvas.Rect(0, 0, w, h, "black");
 
     // Draw the circles.
-    const auto & body_set = surface.GetConstShapeSet();
-    for (auto * body : body_set) {
-      //canvas.Circle(body->GetPerimeter(), color_map[body->GetColorID()], "white");
-      //canvas.Circle(body->GetPerimeter(), "", color_map[body->GetColorID()]); <-- old
-      //canvas.Circle(body->GetPerimeter(), "", "white");
-      canvas.Circle(*body, "", color_map[body->GetColorID()]);
+    const auto & shape_set = surface.GetConstShapeSet();
+    for (auto * shape : shape_set) {
+      canvas.Circle(*shape, "", color_map[shape->GetColorID()]);
     }
   }
 
   // Draw a Surface2D, just specifying the number of colors.
-  template <typename BODY_TYPE>
-  void Draw(Canvas canvas, const Surface2D<BODY_TYPE> & surface, int num_colors)
+  template <typename SHAPE_TYPE>
+  void Draw(Canvas canvas, const Surface2D<SHAPE_TYPE> & surface, int num_colors)
   {
     Draw(canvas, surface, GetHueMap(num_colors));
   }

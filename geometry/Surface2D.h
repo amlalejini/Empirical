@@ -31,6 +31,7 @@ namespace emp {
 
     virtual double GetWidth() const = 0;
     virtual double GetHeight() const = 0;
+    virtual void Clear() = 0;
 
   };
 
@@ -45,7 +46,8 @@ namespace emp {
       : max_pos(_width, _height),
         friction(surface_friction)
     { std::cout << "Surface2D::Constructor" << std::endl; }
-    ~Surface2D() {
+    // TODO: look into this 'throw()'; why needed?
+    ~Surface2D() throw() {
       std::cout << "Surface2D::~Surface2D" << std::endl;
       Clear();
     }
@@ -63,9 +65,8 @@ namespace emp {
     void SetFriction(double friction) { this->friction = friction; }
 
     // Add a single shape.  Surface now controls this shape and must delete it.
-    Surface2D & AddShape(SHAPE_TYPE *new_shape) {
-      shape_set.push_back(new_shape);     // Add shape to master list
-      return *this;
+    void AddShape(SHAPE_TYPE *shape) {
+      shape_set.push_back(shape);     // Add shape to master list
     }
 
     void RemoveShape(SHAPE_TYPE *shape) {
@@ -74,12 +75,11 @@ namespace emp {
     }
 
     // Clear all bodies on the surface.
-    Surface2D & Clear() {
+    void Clear() override {
       for (auto * shape : shape_set) {
         delete shape;
       }
       shape_set.resize(0);
-      return *this;
     }
 
   };
