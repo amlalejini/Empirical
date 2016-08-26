@@ -61,7 +61,6 @@ namespace emp {
     Circle(double _x, double _y, double _r=0) : Shape(_x, _y, _r) { ; }
     Circle(double _r=0) : Shape(_r) { ; }
 
-
     Circle & SetCenter(const Point<double> & new_center) override { center = new_center; return *this; }
     Circle & SetCenterX(double new_x) override { center.SetX(new_x); return *this; }
     Circle & SetCenterY(double new_y) override { center.SetY(new_y); return *this; }

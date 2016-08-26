@@ -46,6 +46,7 @@ namespace emp {
   // Simple physics with CircleBody2D bodies.
   // BODY_TYPES cannot be empty.
   // TODO: guarantee that BODY_TYPES is not empty
+  // Physics will assign unique type IDs to each body type added.
   template <typename... BODY_TYPES>
   class CirclePhysics2D {
     protected:
@@ -82,7 +83,6 @@ namespace emp {
       // Default collision resolution (called if none of the signals result in collision resolution)]
       // Simple bounce.
       void DefaultCollisionResolution(Body2D_Base * body1, Body2D_Base * body2) {
-        std::cout << "Default Collision Resolution!" << std::endl;
         // TODO: this is redundant. Make a collision info struct and pass that around.
         Point<double> dist = body1->GetShapePtr()->GetCenter() - body2->GetShapePtr()->GetCenter();
         double sq_pair_dist = dist.SquareMagnitude();
@@ -329,6 +329,7 @@ namespace emp {
                                       [in_body](Surface2D<OwnedShape<Circle, BODY_TYPE>> * s_ptr) {
                                           s_ptr->AddShape(in_body->GetShapePtr());
                                       });
+        in_body->SetPhysicsBodyTypeID(GetTypeID(*in_body)); // Assign body a physics id.
         return *this;
       }
 

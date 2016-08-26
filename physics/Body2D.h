@@ -80,6 +80,8 @@ namespace emp {
     Signal<Body2D_Base*> on_collision_sig;
     Signal<> on_destruction_sig;
 
+    int physics_body_id;  // ID used by physics to identify the body type.
+
     // Information about other bodies that this body is linked to.
     emp::vector<BodyLink*> from_links;  // Active links initiated by body.
     emp::vector<BodyLink*> to_links;    // Active links targeting body.
@@ -95,7 +97,7 @@ namespace emp {
       to_links.pop_back();
     }
 
-    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0), destroy(false) { ; }
+    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0), destroy(false), physics_body_id(-1) { ; }
 
   public:
     virtual ~Body2D_Base() {
@@ -104,7 +106,10 @@ namespace emp {
       while (to_links.size()) RemoveLink(to_links[0]);
     }
 
-    virtual Shape * GetShapePtr() { return nullptr; }
+    virtual Shape * GetShapePtr() = 0;
+    virtual Shape & GetShape() = 0;
+    virtual const Shape & GetConstShape() const = 0;
+    virtual int GetPhysicsBodyTypeID() const { return physics_body_id; }
 
     virtual const Point<double> & GetVelocity() const { return velocity; }
     virtual const Point<double> & GetAnchor() const = 0;
@@ -121,6 +126,7 @@ namespace emp {
     virtual void SetMass(double m) { mass = m; mass == 0.0 ? inv_mass = 0 : inv_mass = 1.0 / mass; }
     virtual void SetPressure(double p) { pressure = p; }
     virtual void SetMaxPressure(double mp) { max_pressure = mp; }
+    virtual void SetPhysicsBodyTypeID(int id) { physics_body_id = id; }
     virtual void MarkForDestruction() { destroy = true; }
 
     virtual void IncSpeed(const Point<double> & offset) { velocity += offset; }
@@ -229,6 +235,7 @@ namespace emp {
     using Shape_t = OwnedShape<SHAPE_TYPE, Body<SHAPE_TYPE, OWNER_TYPE>>;
     Shape_t * shape_ptr; // circle, rectangle, etc.
     OWNER_TYPE * owner_ptr; // organism, resource, etc.
+    int owner_type_id;
     bool has_owner;
 
     // TODO; register update signal for body size; when SetSize is called, update this variable.
@@ -238,6 +245,7 @@ namespace emp {
     template <typename... ARGS>
     Body(ARGS... args) :
       owner_ptr(nullptr),
+      owner_type_id(-1),
       has_owner(false)
     {
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
@@ -245,10 +253,8 @@ namespace emp {
     }
 
     template <typename... ARGS>
-    Body(OWNER_TYPE * o_ptr, ARGS... args) :
-      owner_ptr(o_ptr),
-      has_owner(true)
-    {
+    Body(OWNER_TYPE * o_ptr, ARGS... args) {
+      AttachOwner(o_ptr);
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
       target_body_size = shape_ptr->GetRadius();
     }
@@ -258,8 +264,8 @@ namespace emp {
     }
 
     Shape_t * GetShapePtr() override { return shape_ptr; }
-    Shape_t & GetShape() { return *shape_ptr; }
-    const Shape_t & GetConstShape() const { return *shape_ptr; }
+    Shape_t & GetShape() override { return *shape_ptr; }
+    const Shape_t & GetConstShape() const override { return *shape_ptr; }
     OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
     OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
     const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
