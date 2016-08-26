@@ -114,6 +114,7 @@ namespace emp {
     virtual double GetMaxPressure() const { return max_pressure; }
     virtual bool GetDestroyFlag() const { return destroy; }
     virtual bool ExceedsStressThreshold() const { return pressure > max_pressure; }
+    virtual bool IsColliding() const { return is_colliding; }
 
     virtual void SetVelocity(double x, double y) { velocity.Set(x, y); }
     virtual void SetVelocity(const Point<double> & v) { velocity = v; }

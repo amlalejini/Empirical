@@ -50,6 +50,7 @@ namespace emp {
   class CirclePhysics2D {
     protected:
       using Shape_t = Circle;
+      using collision_resolution_fun_type = std::function<void(Body2D_Base *, Body2D_Base *)>;
       emp::vector<Surface*> surface_set;
       Point<double> *max_pos;       // Max position across all surfaces.
       bool configured;              // Have the physics been configured yet?
@@ -70,13 +71,56 @@ namespace emp {
         // If bodies aren't touching, no collision.
         if (sq_pair_dist >= sq_min_dist) return false;
         // Collision!
-        body1->TriggerCollision(body2);
+        body1->TriggerCollision(body2);         // Give bodies chance to resolve first.
         body2->TriggerCollision(body1);
-        on_collision_sig.Trigger(body1, body2);
+        on_collision_sig.Trigger(body1, body2); // Give whoever registered with collision signal chance to resolve.
+        if (body1->IsColliding() || body2->IsColliding())
+          this->collision_resolution_fun(body1, body2); // Fallback to default collision function.
+        return true;
+      }
 
+      // Default collision resolution (called if none of the signals result in collision resolution)]
+      // Simple bounce.
+      void DefaultCollisionResolution(Body2D_Base * body1, Body2D_Base * body2) {
+        std::cout << "Default Collision Resolution!" << std::endl;
+        // TODO: this is redundant. Make a collision info struct and pass that around.
+        Point<double> dist = body1->GetShapePtr()->GetCenter() - body2->GetShapePtr()->GetCenter();
+        double sq_pair_dist = dist.SquareMagnitude();
+        const double radius_sum = body1->GetShapePtr()->GetRadius() + body2->GetShapePtr()->GetRadius();
+        const double sq_min_dist = radius_sum * radius_sum;
 
-        return false;
-
+        // If the shapes are on top of each other, we have a problem. Shift one!
+        if (sq_pair_dist == 0.0) {
+          body2->GetShapePtr()->Translate(Point<double>(0.01, 0.01));
+          dist = body1->GetShapePtr()->GetCenter() - body2->GetShapePtr()->GetCenter();
+          sq_pair_dist = dist.SquareMagnitude();
+        }
+        // Re-adjust position to remove overlap.
+        const double true_dist = sqrt(sq_pair_dist);
+        const double overlap_dist = ((double) radius_sum) - true_dist;
+        const double overlap_frac = overlap_dist / true_dist;
+        const Point<double> cur_shift = dist * (overlap_frac / 2.0);
+        body1->AddShift(cur_shift);   // Split the re-adjustment between the two colliding bodies.
+        body2->AddShift(-cur_shift);
+        // Resolve collision using impulse resolution.
+        const double coefficient_of_restitution = 1.0;
+        const Point<double> collision_normal(dist / true_dist);
+        const Point<double> rel_velocity(body1->GetVelocity() - body2->GetVelocity());
+        const double velocity_along_normal = (rel_velocity.GetX() * collision_normal.GetX()) + (rel_velocity.GetY() * collision_normal.GetY());
+        // If velocities are separating, no need to resolve anything further.
+        if (velocity_along_normal > 0) {
+          // Mark collision as resolved.
+          body1->ResolveCollision(); body2->ResolveCollision();
+          return;
+        }
+        double j = -(1 + coefficient_of_restitution) * velocity_along_normal; // Calculate j, the impulse scalar.
+        j /= body1->GetInvMass() + body2->GetInvMass();
+        const Point<double> impulse(collision_normal * j);
+        // Apply the impulse.
+        body1->SetVelocity(body1->GetVelocity() + (impulse * body1->GetInvMass()));
+        body2->SetVelocity(body2->GetVelocity() - (impulse * body2->GetInvMass()));
+        // Mark collision as resolved.
+        body1->ResolveCollision(); body2->ResolveCollision();
       }
 
       // TODO: clean up template-meta programming stuff to have _imp versions and public versions.
@@ -233,6 +277,8 @@ namespace emp {
         delete max_pos;
       }
 
+      collision_resolution_fun_type collision_resolution_fun;
+
       // Call GetTypeID<type_name>() to get the ID associated with owner type type_name.
       template<typename T>
       constexpr static int GetTypeID() { return get_type_index<T, BODY_TYPES...>(); }
@@ -255,6 +301,8 @@ namespace emp {
       // used when creating this.
       void ConfigPhysics(double width, double height, emp::Random *r, double surface_friction) {
         if (configured) { for (auto * surface : surface_set) delete surface; }
+        collision_resolution_fun = [this](Body2D_Base * body1, Body2D_Base * body2)
+                                   { this->DefaultCollisionResolution(body1, body2); };
         BuildSurfaceSet<BODY_TYPES...>(width, height, surface_friction);
         max_pos = new Point<double>(width, height);
         random_ptr = r;
@@ -268,6 +316,10 @@ namespace emp {
       }
       void RegisterOnCollisionCallback(std::function<void(Body2D_Base *, Body2D_Base *)> callback) {
         on_collision_sig.AddAction(callback);
+      }
+      // Set the fallback collision resolution fun (if all signal triggers fail to resolve collision).
+      void SetCollisionResolutionFun(std::function<void(Body2D_Base *, Body2D_Base *)> fun) {
+        collision_resolution_fun = fun;
       }
 
       template <typename BODY_TYPE>
