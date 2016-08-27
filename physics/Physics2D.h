@@ -41,17 +41,42 @@
 // TODO: eventually make number of surfaces generic
 namespace emp {
 
-  // TODO: check that all owned shape ty
+  // Struct used to pass around collision information.
+  // TODO: Is this worth incorporating? Quite a bit of boiler plate. Not sure how much it will actually save us.
+  struct CollisionInfo {
+    // Phase one detection.
+    Point<double> dist;
+    double sq_pair_dist;
+    double radius_sum;
+    double sq_min_dist;
+    // Phase two detection.
+    double true_dist;
+    double overlap_dist;
+    double overlap_frac;
+    // Other information.
+    bool resolved;
+
+    CollisionInfo(Point<double> _dist, double _sq_pair_dist, double _radius_sum, double _sq_min_dist) :
+      dist(_dist), sq_pair_dist(_sq_pair_dist), radius_sum(_radius_sum), sq_min_dist(_sq_min_dist),
+      true_dist(-1), overlap_dist(-1), overlap_frac(-1), resolved(false) { ; }
+    CollisionInfo(Point<double> _dist, double _sq_pair_dist, double _radius_sum, double _sq_min_dist,
+                  double _true_dist, double _overlap_dist, double _overlap_frac) :
+                  dist(_dist), sq_pair_dist(_sq_pair_dist), radius_sum(_radius_sum), sq_min_dist(_sq_min_dist),
+                  true_dist(_true_dist), overlap_dist(_overlap_dist), overlap_frac(_overlap_frac),
+                  resolved(false) { ; }
+    void Resolve() { resolved = true; }
+    bool IsResolved() { return resolved; }
+  };
 
   // Simple physics with CircleBody2D bodies.
-  // BODY_TYPES cannot be empty.
-  // TODO: guarantee that BODY_TYPES is not empty
-  // Physics will assign unique type IDs to each body type added.
+  // BODY_TYPES cannot be empty. Each BODY_TYPE will be assigned a unique physics ID.
+  // For circle physics, every body must derive from Body<Circle, ...> where ... can be anything.
   template <typename... BODY_TYPES>
   class CirclePhysics2D {
     protected:
       using Shape_t = Circle;
       using collision_resolution_fun_type = std::function<void(Body2D_Base *, Body2D_Base *)>;
+      collision_resolution_fun_type collision_resolution_fun;
       emp::vector<Surface*> surface_set;
       Point<double> *max_pos;       // Max position across all surfaces.
       bool configured;              // Have the physics been configured yet?
@@ -122,42 +147,58 @@ namespace emp {
         // Mark collision as resolved.
         body1->ResolveCollision(); body2->ResolveCollision();
       }
-
-      // TODO: clean up template-meta programming stuff to have _imp versions and public versions.
+      /////////////////////////////////////////////////////////////
+      // Below, you enter template meta-programming madness.
+      /////////////////////////////////////////////////////////////
       // Template meta-programming magic to build surface set.
-      template <typename FIRST_TYPE>
       void BuildSurfaceSet(double width, double height, double friction) {
+        BuildSurfaceSet_impl<BODY_TYPES...>(width, height, friction);
+      }
+      template <typename FIRST_TYPE>
+      void BuildSurfaceSet_impl(double width, double height, double friction) {
         // Build set.
         surface_set.push_back(new Surface2D<OwnedShape<Shape_t, FIRST_TYPE>>(width, height, friction));
       }
       template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
-      void BuildSurfaceSet(double width, double height, double friction) {
-        BuildSurfaceSet<FIRST_TYPE>(width, height, friction);
-        BuildSurfaceSet<SECOND_TYPE, MORE_TYPES...>(width, height, friction);
+      void BuildSurfaceSet_impl(double width, double height, double friction) {
+        BuildSurfaceSet_impl<FIRST_TYPE>(width, height, friction);
+        BuildSurfaceSet_impl<SECOND_TYPE, MORE_TYPES...>(width, height, friction);
       }
 
       // Internal funtion used to find the correct surface and apply a function to that surface.
       template <typename BODY_TYPE>
       void FindSurfaceApplyFun(BODY_TYPE * in_body,
+                               std::function<void(Surface2D<OwnedShape<Circle, BODY_TYPE>>*)> fun) {
+        this->FindSurfaceApplyFun_impl<BODY_TYPE, BODY_TYPES...>(in_body,
+                                       [in_body](Surface2D<OwnedShape<Circle, BODY_TYPE>> * s_ptr) {
+                                         s_ptr->AddShape(in_body->GetShapePtr());
+                                       }, 0);
+      }
+      template <typename BODY_TYPE>
+      void FindSurfaceApplyFun_impl(BODY_TYPE * in_body,
                                std::function<void(Surface2D<OwnedShape<Circle, BODY_TYPE>>*)> fun,
-                               int i = 0) { emp_assert(false && "Failed to find correct surface."); }
+                               int i) { emp_assert(false && "Failed to find correct surface."); }
       template <typename BODY_TYPE, typename FIRST_TYPE, typename... MORE_TYPES>
-      void FindSurfaceApplyFun(BODY_TYPE * in_body,
+      void FindSurfaceApplyFun_impl(BODY_TYPE * in_body,
                                std::function<void(Surface2D<OwnedShape<Circle, BODY_TYPE>>*)> fun,
-                               int i = 0) {
+                               int i) {
         // Does BODY_TYPE match FIRST_TYPE?
         if (std::is_same<BODY_TYPE, FIRST_TYPE>())
           fun(static_cast<Surface2D<OwnedShape<Circle, BODY_TYPE>>*>(surface_set[i]));
         else
-          FindSurfaceApplyFun<BODY_TYPE, MORE_TYPES...>(in_body, fun, ++i);
+          FindSurfaceApplyFun_impl<BODY_TYPE, MORE_TYPES...>(in_body, fun, ++i);
       }
 
+      void UpdateSurfaceBodies() {
+        UpdateSurfaceBodies_impl<BODY_TYPES...>(0);
+      }
       template <typename FIRST_TYPE>
-      void UpdateSurfaceBodies(int i = 0) {
+      void UpdateSurfaceBodies_impl(int i = 0) {
         auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
         auto & surface_shapes = surface->GetShapeSet();
         int cur_size = (int) surface_shapes.size();
         int cur_id = 0;
+        double f = surface->GetFriction();
         while (cur_id < cur_size) {
           emp_assert(surface_shapes[cur_id] != nullptr && surface_shapes[cur_id].HasOwner());
           if (surface_shapes[cur_id]->GetOwnerPtr()->GetDestroyFlag()) {
@@ -166,7 +207,7 @@ namespace emp {
             cur_size--;
             surface_shapes[cur_id] = surface_shapes[cur_size];
           } else {
-            surface_shapes[cur_id]->GetOwnerPtr()->BodyUpdate(0.0015, 0.25); // TODO: get rid of magic numbers (friction, change_rate)
+            surface_shapes[cur_id]->GetOwnerPtr()->BodyUpdate(f, 0.25); // TODO: get rid of magic numbers (friction, change_rate)
             if (surface_shapes[cur_id]->GetRadius() > max_radius)
               max_radius = surface_shapes[cur_id]->GetRadius();
             cur_id++;
@@ -175,13 +216,16 @@ namespace emp {
         surface_shapes.resize(cur_size);
       }
       template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
-      void UpdateSurfaceBodies(int i = 0) {
-        UpdateSurfaceBodies<FIRST_TYPE>(i);
-        UpdateSurfaceBodies<SECOND_TYPE, MORE_TYPES...>(++i);
+      void UpdateSurfaceBodies_impl(int i = 0) {
+        UpdateSurfaceBodies_impl<FIRST_TYPE>(i);
+        UpdateSurfaceBodies_impl<SECOND_TYPE, MORE_TYPES...>(++i);
       }
 
+      void FinalizeSurfaceBodies() {
+        FinalizeSurfaceBodies_impl<BODY_TYPES...>(0);
+      }
       template <typename FIRST_TYPE>
-      void FinalizeSurfaceBodies(int i = 0) {
+      void FinalizeSurfaceBodies_impl(int i = 0) {
         auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
         auto & surface_shapes = surface->GetShapeSet();
         int cur_size = (int) surface_shapes.size();
@@ -202,14 +246,28 @@ namespace emp {
         surface_shapes.resize(cur_size);
       }
       template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
-      void FinalizeSurfaceBodies(int i = 0) {
-        FinalizeSurfaceBodies<FIRST_TYPE>(i);
-        FinalizeSurfaceBodies<SECOND_TYPE, MORE_TYPES...>(++i);
+      void FinalizeSurfaceBodies_impl(int i = 0) {
+        FinalizeSurfaceBodies_impl<FIRST_TYPE>(i);
+        FinalizeSurfaceBodies_impl<SECOND_TYPE, MORE_TYPES...>(++i);
       }
 
-      // Test for collisions in *this* physics.
+      // Test for collisions in *this* physics. This is what physics should call (not _impl functions).
+      void TestCollisions() {
+        const int num_cols = std::min<int>(GetWidth() / (max_radius * 2.0), 32);
+        const int num_rows = std::min<int>(GetHeight() / (max_radius * 2.0), 32);
+        const int max_col = num_cols - 1;
+        const int max_row = num_rows - 1;
+        const int num_sectors = num_cols * num_rows;
+        // Calculate sector size.
+        const double sector_width = GetWidth() / (double) num_cols;
+        const double sector_height = GetHeight() / (double) num_rows;
+        emp::vector<emp::vector<Body2D_Base *>> sector_set(num_sectors);
+
+        TestCollisions_impl<BODY_TYPES...>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
+                                   sector_height, sector_set);
+      }
       template <typename FIRST_TYPE>
-      void TestCollisions(const int num_cols, const int num_rows, const int max_col, const int max_row,
+      void TestCollisions_impl(const int num_cols, const int num_rows, const int max_col, const int max_row,
                           const int num_sectors, const double sector_width, const double sector_height,
                           emp::vector<emp::vector<Body2D_Base *>> & sector_set, int i = 0) {
         // Calculate number of sectors to use (currently no more than 1024).
@@ -235,21 +293,19 @@ namespace emp {
           emp_assert(cur_sector < (int) sector_set.size());
           sector_set[cur_sector].push_back(shape->GetOwnerPtr());
         }
-
       }
       template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
-      void TestCollisions(const int num_cols, const int num_rows, const int max_col, const int max_row,
+      void TestCollisions_impl(const int num_cols, const int num_rows, const int max_col, const int max_row,
                           const int num_sectors, const double sector_width, const double sector_height,
                           emp::vector<emp::vector<Body2D_Base *>> & sector_set, int i = 0) {
-
-        TestCollisions<FIRST_TYPE>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
+        TestCollisions_impl<FIRST_TYPE>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
                                    sector_height, sector_set, i);
-        TestCollisions<SECOND_TYPE, MORE_TYPES...>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
+        TestCollisions_impl<SECOND_TYPE, MORE_TYPES...>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
                                    sector_height, sector_set, ++i);
       }
 
       template <typename FIRST_TYPE>
-      void DrawOnCanvasImpl(web::Canvas canvas, const emp::vector<std::string> & color_map, int i = 0) {
+      void DrawOnCanvas_impl(web::Canvas canvas, const emp::vector<std::string> & color_map, int i = 0) {
         auto * surface = static_cast<Surface2D<OwnedShape<Circle, FIRST_TYPE>>*>(surface_set[i]);
         auto & surface_shapes = surface->GetShapeSet();
         for (auto * shape : surface_shapes) {
@@ -257,17 +313,20 @@ namespace emp {
         }
       }
       template <typename FIRST_TYPE, typename SECOND_TYPE, typename... MORE_TYPES>
-      void DrawOnCanvasImpl(web::Canvas canvas, const emp::vector<std::string> & color_map, int i = 0) {
-        DrawOnCanvasImpl<FIRST_TYPE>(canvas, color_map, i);
-        DrawOnCanvasImpl<SECOND_TYPE, MORE_TYPES...>(canvas, color_map, ++i);
+      void DrawOnCanvas_impl(web::Canvas canvas, const emp::vector<std::string> & color_map, int i = 0) {
+        DrawOnCanvas_impl<FIRST_TYPE>(canvas, color_map, i);
+        DrawOnCanvas_impl<SECOND_TYPE, MORE_TYPES...>(canvas, color_map, ++i);
       }
 
     public:
       CirclePhysics2D()
         : configured(false)
-      { ; }
+      {
+        emp_assert(sizeof...(BODY_TYPES) > 0);
+      }
 
       CirclePhysics2D(double width, double height, emp::Random *r, double surface_friction) {
+        emp_assert(sizeof...(BODY_TYPES) > 0);
         ConfigPhysics(width, height, r, surface_friction);
       }
 
@@ -276,8 +335,6 @@ namespace emp {
         for (auto * surface : surface_set) delete surface;
         delete max_pos;
       }
-
-      collision_resolution_fun_type collision_resolution_fun;
 
       // Call GetTypeID<type_name>() to get the ID associated with owner type type_name.
       template<typename T>
@@ -303,7 +360,7 @@ namespace emp {
         if (configured) { for (auto * surface : surface_set) delete surface; }
         collision_resolution_fun = [this](Body2D_Base * body1, Body2D_Base * body2)
                                    { this->DefaultCollisionResolution(body1, body2); };
-        BuildSurfaceSet<BODY_TYPES...>(width, height, surface_friction);
+        BuildSurfaceSet(width, height, surface_friction);
         max_pos = new Point<double>(width, height);
         random_ptr = r;
         configured = true;
@@ -325,7 +382,7 @@ namespace emp {
       template <typename BODY_TYPE>
       CirclePhysics2D & AddBody(BODY_TYPE * in_body) {
         emp_assert(configured);
-        this->FindSurfaceApplyFun<BODY_TYPE, BODY_TYPES...>(in_body,
+        this->FindSurfaceApplyFun<BODY_TYPE>(in_body,
                                       [in_body](Surface2D<OwnedShape<Circle, BODY_TYPE>> * s_ptr) {
                                           s_ptr->AddShape(in_body->GetShapePtr());
                                       });
@@ -336,7 +393,7 @@ namespace emp {
       template <typename BODY_TYPE>
       CirclePhysics2D & RemoveBody(BODY_TYPE * in_body) {
         emp_assert(configured);
-        this->FindSurfaceApplyFun<BODY_TYPE, BODY_TYPES...>(in_body,
+        this->FindSurfaceApplyFun<BODY_TYPE>(in_body,
                                       [in_body](Surface2D<OwnedShape<Circle, BODY_TYPE>> * s_ptr) {
                                           s_ptr->RemoveShape(in_body->GetShapePtr());
                                       });
@@ -349,33 +406,19 @@ namespace emp {
         on_update_sig.Trigger();
         // Reset max_radius.
         max_radius = 0.0;
-        // Update all bodies. Remove those marked for removal.
-        UpdateSurfaceBodies<BODY_TYPES...>();
+        // Update all bodies. Remove those marked for removal. Will also find the max radius.
+        UpdateSurfaceBodies();
         // Test for collisions.
         //  - If nothing exists, no need to test for collisions.
-        if (max_radius > 0.0) { // TODO: wrap this up in a TestCollisions function (hide all of the grossness).
-          const int num_cols = std::min<int>(GetWidth() / (max_radius * 2.0), 32);
-          const int num_rows = std::min<int>(GetHeight() / (max_radius * 2.0), 32);
-          const int max_col = num_cols - 1;
-          const int max_row = num_rows - 1;
-          const int num_sectors = num_cols * num_rows;
-          // Calculate sector size.
-          const double sector_width = GetWidth() / (double) num_cols;
-          const double sector_height = GetHeight() / (double) num_rows;
-          emp::vector<emp::vector<Body2D_Base *>> sector_set(num_sectors);
-
-          TestCollisions<BODY_TYPES...>(num_cols, num_rows, max_col, max_row, num_sectors, sector_width,
-                                     sector_height, sector_set);
-        }
+        if (max_radius > 0.0) TestCollisions();
         // Finalize positions and test for stress-induced removal.
-        FinalizeSurfaceBodies<BODY_TYPES...>();
+        FinalizeSurfaceBodies();
       }
 
-      // TODO: move this out of physics eventually
       void DrawOnCanvas(web::Canvas canvas, const emp::vector<std::string> & color_map) {
         canvas.Clear();
         canvas.Rect(0, 0, max_pos->GetX(), max_pos->GetY(), "black");
-        DrawOnCanvasImpl<BODY_TYPES...>(canvas, color_map);
+        DrawOnCanvas_impl<BODY_TYPES...>(canvas, color_map);
       }
 
   };

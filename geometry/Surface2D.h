@@ -40,7 +40,7 @@ namespace emp {
   private:
     const Point<double> max_pos;        // Lower-left corner of the surface.
     emp::vector<SHAPE_TYPE *> shape_set;  // Set of all bodies on surface
-    double friction;
+    double friction;  // TODO: should friction be here? Surfaces don't need to know anything about physics..
   public:
     Surface2D(double _width, double _height, double surface_friction = 0.00125)
       : max_pos(_width, _height),

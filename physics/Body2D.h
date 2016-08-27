@@ -32,8 +32,6 @@
 #include <iostream>
 #include <functional>
 
-// TODO: access to color ID of shape
-
 namespace emp {
   // TODO: Discuss the fate of BODY_LINK_TYPE. Should we still be using this? Or is there something
   //  better?
@@ -238,7 +236,6 @@ namespace emp {
     int owner_type_id;
     bool has_owner;
 
-    // TODO; register update signal for body size; when SetSize is called, update this variable.
     double target_body_size;   // Means different things to different shapes.
 
   public:
@@ -283,7 +280,6 @@ namespace emp {
       owner_ptr = ptr;
       has_owner = true;
     }
-    // TODO: alert owner that body is no longer attached? -- Probably.
     void DetachOwner() {
       owner_ptr = nullptr;
       has_owner = false;
