@@ -20,6 +20,7 @@ namespace emp {
       emp_assert(false); // Should never run GetTypeTrackerID from the base class!
       return -1;
     }
+    virtual ~TrackedType() = default;
   };
 
   // The derived classes to be tracked should inherit from TypeTracker_Class<ID>
@@ -57,9 +58,23 @@ namespace emp {
     TypeTracker & operator=(TypeTracker &&) = default;
 
     template <typename REAL_T>
-    wrap_t<REAL_T> Wrap(REAL_T && val) { return wrap_t<REAL_T>(std::forward<REAL_T>(val)); }
+    wrap_t<REAL_T> Wrap(REAL_T && val) {
+      constexpr bool type_ok = has_type<REAL_T, TYPES...>();
+      emp_assert(type_ok);    // Make sure we're wrapping a legal type.
+      return wrap_t<REAL_T>(std::forward<REAL_T>(val));
+    }
     template <typename REAL_T>
-    wrap_t<REAL_T> * New(REAL_T && val) { return new wrap_t<REAL_T>(std::forward<REAL_T>(val)); }
+    wrap_t<REAL_T> * New(REAL_T && val) {
+      constexpr bool type_ok = has_type<REAL_T, TYPES...>();
+      emp_assert(type_ok);    // Make sure we're wrapping a legal type.
+      return new wrap_t<REAL_T>(std::forward<REAL_T>(val));
+    }
+    template <typename REAL_T>
+    wrap_t<REAL_T> * New(REAL_T & val) {
+      constexpr bool type_ok = has_type<REAL_T, TYPES...>();
+      emp_assert(type_ok);    // Make sure we're wrapping a legal type.
+      return new wrap_t<REAL_T>(std::forward<REAL_T>(val));
+    }
 
     template <typename T1, typename T2>
     this_t & AddFunction( std::function<void(T1,T2)> fun ) {
@@ -67,6 +82,8 @@ namespace emp {
       constexpr int ID2 = get_type_index<T2,TYPES...>();
       constexpr int POS = ID1 * GetNumTypes() + ID2;
       redirects[POS] = [fun](TrackedType* b1, TrackedType* b2) {
+        emp_assert(dynamic_cast<wrap_t<T1> *>(b1) != nullptr);
+        emp_assert(dynamic_cast<wrap_t<T2> *>(b2) != nullptr);
         fun( ((wrap_t<T1> *) b1)->value, ((wrap_t<T2> *) b2)->value );
       };
       return *this;

@@ -31,33 +31,33 @@ namespace emp {
     bool IsActive() const { return active; }
     bool IsOwner() const { return owner; }
 
-    void Inc() { emp_assert(active); count++; }
+    void Inc() { emp_assert(active, "Incrementing deleted pointer!"); count++; }
     void Dec() {
       // If this pointer is not active, it doesn't matter how many copies we have.
       if (active == false) return;
 
-      emp_assert(count > 0);        // Do not decrement more copies than we have!
+      emp_assert(count > 0, "Decrementing Ptr count; already zero!");        // Do not decrement more copies than we have!
 
       // Make sure one of these conditions is true:
       // * We are not getting rid of the last copy, -or-
       // * We've already deleted this pointer, -or-
       // * We're not responsible for deleting this pointer.
-      emp_assert(count > 1 || owner == false);
+      emp_assert(count > 1 || owner == false, "Removing last reference to owned Ptr!");
       count--;
     }
 
     void MarkDeleted() {
-      emp_assert(active == true);   // Do not delete a pointer more than once!
-      emp_assert(owner == true);    // We should only be deleting pointers we own!
+      emp_assert(active == true, "Deleting same emp::Ptr a second time!");
+      emp_assert(owner == true, "Deleting emp::Ptr we don't own!");
       active = false;
     }
     void Claim() {
-      emp_assert(owner == false);    // We can only claim pointer we don't already own!
+      emp_assert(owner == false, "Claiming an emp::Ptr that we already own!");
       owner = true;
     }
     void Surrender() {
-      emp_assert(active == true);   // Do not surrender an inactive pointer!
-      emp_assert(owner == true);    // We can only surrender a pointer we own!
+      emp_assert(active == true, "Surrendering emp::Ptr that was deallocated!");
+      emp_assert(owner == true, "Surrendering emp::Ptr that we don't own!");
       owner = false;
     }
   };
@@ -113,8 +113,9 @@ namespace emp {
     // This pointer was already created, but given to Ptr.
     void Old(TYPE * ptr) {
       if (verbose) std::cout << "Old:    " << ((uint64_t) ptr) << std::endl;
-      emp_assert(!HasPtr(ptr) || !IsActive(ptr)); // Make sure pointer is not already stored!
-      ptr_count[ptr] = PtrInfo(false);
+      // If we already have this pointer, just increment the count.  Otherwise track it now.
+      if (HasPtr(ptr) && IsActive(ptr)) Inc(ptr);
+      else ptr_count[ptr] = PtrInfo(false);
     }
     void Inc(TYPE * ptr) {
       if (verbose) std::cout << "Inc:    " << ((uint64_t) ptr) << std::endl;
@@ -136,9 +137,9 @@ namespace emp {
 
 #undef EMP_IF_MEMTRACK
 #ifdef EMP_TRACK_MEM
-#define EMP_IF_MEMTRACK(STATEMENTS) { STATEMENTS }
+#define EMP_IF_MEMTRACK(...) { __VA_ARGS__ }
 #else
-#define EMP_IF_MEMTRACK(STATEMENTS)
+#define EMP_IF_MEMTRACK(...)
 #endif
 
   template <typename TYPE>
@@ -147,16 +148,20 @@ namespace emp {
     TYPE * ptr;
 
 #ifdef EMP_TRACK_MEM
-    static PtrTracker<TYPE> & Tracker() { return PtrTracker<TYPE>::Get(); }
+    static PtrTracker<TYPE> & Tracker() {
+      return PtrTracker<TYPE>::Get();
+    }
 #endif
   public:
     Ptr() : ptr(nullptr) { ; }
-    Ptr(TYPE * in_ptr) : ptr(in_ptr) { EMP_IF_MEMTRACK( Tracker().New(ptr); ); }
-    Ptr(TYPE & obj) : ptr(&obj) { EMP_IF_MEMTRACK( Tracker().Old(ptr); ); }
+    Ptr(TYPE * in_ptr, bool is_new=true) : ptr(in_ptr) {
+      EMP_IF_MEMTRACK( if (is_new) Tracker().New(ptr); else Tracker().Old(ptr); );
+    }
+    Ptr(TYPE & obj) : Ptr(&obj, false) {;}  // Pre-existing objects are NOT tracked.
     Ptr(const Ptr<TYPE> & _in) : ptr(_in.ptr) { EMP_IF_MEMTRACK( Tracker().Inc(ptr); ); }
     ~Ptr() { EMP_IF_MEMTRACK( Tracker().Dec(ptr); ); }
 
-    bool IsNull() { return ptr == nullptr; }
+    bool IsNull() const { return ptr == nullptr; }
 
     void New() {
       EMP_IF_MEMTRACK( if (ptr) Tracker().Dec(ptr); );
@@ -173,7 +178,6 @@ namespace emp {
     void New(T... args) {
       EMP_IF_MEMTRACK( if (ptr) Tracker().Dec(ptr); );
       ptr = new TYPE(std::forward<T>(args)...);
-      // ptr = new TYPE(args...);
       EMP_IF_MEMTRACK(Tracker().New(ptr););
     }
     void Delete() {
@@ -188,16 +192,21 @@ namespace emp {
       EMP_IF_MEMTRACK(Tracker().Inc(ptr););
       return *this;
     }
-
     TYPE & operator*() { return *ptr; }
     TYPE * operator->() { return ptr; }
+    operator TYPE *() { return ptr; }
 
-    bool operator==(const Ptr<TYPE> & in_ptr) { return ptr == in_ptr.ptr; }
-    bool operator!=(const Ptr<TYPE> & in_ptr) { return ptr != in_ptr.ptr; }
-    bool operator<(const Ptr<TYPE> & in_ptr)  { return ptr < in_ptr.ptr; }
-    bool operator<=(const Ptr<TYPE> & in_ptr) { return ptr <= in_ptr.ptr; }
-    bool operator>(const Ptr<TYPE> & in_ptr)  { return ptr > in_ptr.ptr; }
-    bool operator>=(const Ptr<TYPE> & in_ptr) { return ptr >= in_ptr.ptr; }
+    // Allow Ptr to be treated as an array?
+    // @CAO commented out for now; would need to track array status to call delete[]
+    // TYPE & operator[](int pos) { return ptr[pos]; }
+    // const TYPE & operator[](int pos) const { return ptr[pos]; }
+
+    bool operator==(const Ptr<TYPE> & in_ptr) const { return ptr == in_ptr.ptr; }
+    bool operator!=(const Ptr<TYPE> & in_ptr) const { return ptr != in_ptr.ptr; }
+    bool operator<(const Ptr<TYPE> & in_ptr)  const { return ptr < in_ptr.ptr; }
+    bool operator<=(const Ptr<TYPE> & in_ptr) const { return ptr <= in_ptr.ptr; }
+    bool operator>(const Ptr<TYPE> & in_ptr)  const { return ptr > in_ptr.ptr; }
+    bool operator>=(const Ptr<TYPE> & in_ptr) const { return ptr >= in_ptr.ptr; }
 
     // Some debug testing functions
 #ifdef EMP_TRACK_MEM
