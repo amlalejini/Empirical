@@ -28,6 +28,7 @@
 #include "tools/Ptr.h"
 #include "tools/vector.h"
 #include "tools/signal.h"
+#include "tools/TypeTracker.h"
 
 #include <iostream>
 #include <functional>
@@ -227,13 +228,12 @@ namespace emp {
   };
 
   // Example: a body could be in the shape of a circle and be owned by a resource.
-  template<typename SHAPE_TYPE, typename OWNER_TYPE = std::nullptr_t>
+  template<typename SHAPE_TYPE>
   class Body : public Body2D_Base {
   protected:
-    using Shape_t = OwnedShape<SHAPE_TYPE, Body<SHAPE_TYPE, OWNER_TYPE>>;
+    using Shape_t = OwnedShape<SHAPE_TYPE, Body<SHAPE_TYPE>>;
     Shape_t * shape_ptr; // circle, rectangle, etc.
-    OWNER_TYPE * owner_ptr; // organism, resource, etc.
-    int owner_type_id;
+    TrackedType * tracked_owner;
     bool has_owner;
 
     double target_body_size;   // Means different things to different shapes.
@@ -241,31 +241,30 @@ namespace emp {
   public:
     template <typename... ARGS>
     Body(ARGS... args) :
-      owner_ptr(nullptr),
-      owner_type_id(-1),
+      tracked_owner(nullptr),
       has_owner(false)
     {
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
       target_body_size = shape_ptr->GetRadius();
     }
 
-    template <typename... ARGS>
-    Body(OWNER_TYPE * o_ptr, ARGS... args) {
-      AttachOwner(o_ptr);
-      shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
-      target_body_size = shape_ptr->GetRadius();
-    }
+    // template <typename... ARGS>
+    // Body(OWNER_TYPE * o_ptr, ARGS... args) {
+    //   AttachOwner(o_ptr);
+    //   shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
+    //   target_body_size = shape_ptr->GetRadius();
+    // }
 
     ~Body() {
-      if (has_owner) owner_ptr->DetachBody();
+      //if (has_owner) owner_ptr->DetachBody();
     }
 
     Shape_t * GetShapePtr() override { return shape_ptr; }
     Shape_t & GetShape() override { return *shape_ptr; }
     const Shape_t & GetConstShape() const override { return *shape_ptr; }
-    OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
-    OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
-    const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
+    // OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
+    // OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
+    // const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
 
     // TODO: configure body function?
     // TODO: expose useful shape functions
@@ -275,13 +274,18 @@ namespace emp {
 
     void SetColorID(uint32_t in_id) { shape_ptr->SetColorID(in_id); }
 
-    void AttachOwner(OWNER_TYPE * ptr) {
+    void AttachTrackedOwner(TrackedType * ptr) {
       emp_assert(ptr != nullptr);
-      owner_ptr = ptr;
+      tracked_owner = ptr;
       has_owner = true;
     }
-    void DetachOwner() {
-      owner_ptr = nullptr;
+    // void AttachOwner(OWNER_TYPE * ptr) {
+    //   emp_assert(ptr != nullptr);
+    //   owner_ptr = ptr;
+    //   has_owner = true;
+    // }
+    void DetachTrackedOwner() {
+      tracked_owner = nullptr;
       has_owner = false;
     }
 
