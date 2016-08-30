@@ -45,6 +45,12 @@ namespace emp {
       owner_ptr = ptr;
       has_owner = true;
     }
+
+    void DetachOwner() {
+      owner_ptr = nullptr;
+      has_owner = false;
+    }
+
   };
 
 }

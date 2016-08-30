@@ -160,7 +160,6 @@ namespace emp {
     // Add link FROM this TO link_body.
     virtual void AddLink(BODY_LINK_TYPE type, Body2D_Base & link_body, double cur_dist, double target_dist, double link_strength = 0) {
       emp_assert(!IsLinked(link_body));  // Don't link twice!
-
       // Build connections in both directions.
       auto * new_link = new BodyLink(type, this, &link_body, cur_dist, target_dist, link_strength);
       from_links.push_back(new_link);
@@ -235,6 +234,8 @@ namespace emp {
     Shape_t * shape_ptr; // circle, rectangle, etc.
     TrackedType * tracked_owner;
     bool has_owner;
+    bool has_shape;
+    bool responsible_for_shape;
 
     double target_body_size;   // Means different things to different shapes.
 
@@ -245,18 +246,17 @@ namespace emp {
       has_owner(false)
     {
       shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
+      has_shape = true;
+      responsible_for_shape = true;
       target_body_size = shape_ptr->GetRadius();
     }
 
-    // template <typename... ARGS>
-    // Body(OWNER_TYPE * o_ptr, ARGS... args) {
-    //   AttachOwner(o_ptr);
-    //   shape_ptr = new Shape_t(this, std::forward<ARGS>(args)...);
-    //   target_body_size = shape_ptr->GetRadius();
-    // }
-
     ~Body() {
-      //if (has_owner) owner_ptr->DetachBody();
+      if (has_shape) {
+        shape_ptr->DetachOwner();
+        if (responsible_for_shape) delete shape_ptr;
+        this->DetachShape();
+      }
     }
 
     Shape_t * GetShapePtr() override { return shape_ptr; }
@@ -265,6 +265,14 @@ namespace emp {
     // OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
     // OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
     // const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
+    TrackedType * GetTrackedOwnerPtr() { return tracked_owner; }
+
+    template<typename BODY_OWNER, int TRACKER_ID>
+    BODY_OWNER * GetOwnerPtr() {
+      return static_cast<TypeTracker_Class<BODY_OWNER*, TRACKER_ID>*>(this->tracked_owner)->value;
+    }
+
+    bool HasOwner() const { return has_owner; }
 
     // TODO: configure body function?
     // TODO: expose useful shape functions
@@ -279,14 +287,18 @@ namespace emp {
       tracked_owner = ptr;
       has_owner = true;
     }
-    // void AttachOwner(OWNER_TYPE * ptr) {
-    //   emp_assert(ptr != nullptr);
-    //   owner_ptr = ptr;
-    //   has_owner = true;
-    // }
+
     void DetachTrackedOwner() {
       tracked_owner = nullptr;
       has_owner = false;
+    }
+
+    void SetShapeResponsibility(bool r) {
+      responsible_for_shape = r;
+    }
+    void DetachShape() {
+      shape_ptr = nullptr;
+      has_shape = false;
     }
 
     // TODO: we'll actually want CircleBody<OwnerType> because of these body updates.
@@ -347,7 +359,6 @@ namespace emp {
       // If this body is linked to another, enforce the distance between them.
       for (auto * link : from_links) {
         if (GetAnchor() == link->to->GetAnchor()) {
-          std::cout << "Link's anchor: " << link->to->GetAnchor() << std::endl;
           shape_ptr->Translate(Point<double>(0.01, 0.01));
         }
         // Figure out how much each oragnism should move so that they will be properly spaced.
