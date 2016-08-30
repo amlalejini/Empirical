@@ -101,8 +101,7 @@ namespace emp {
   public:
     virtual ~Body2D_Base() {
       // Remove any remaining links from this body.
-      while (from_links.size()) RemoveLink(from_links[0]);
-      while (to_links.size()) RemoveLink(to_links[0]);
+      RemoveAllLinks();
     }
 
     virtual Shape * GetShapePtr() = 0;
@@ -181,6 +180,11 @@ namespace emp {
         if (link->to->to_links[i]->from == this) { link->to->RemoveToLink(i); break; }
       }
       delete link;
+    }
+
+    virtual void RemoveAllLinks() {
+      while (from_links.size()) RemoveLink(from_links[0]);
+      while (to_links.size()) RemoveLink(to_links[0]);
     }
 
     virtual const BodyLink & FindLink(const Body2D_Base & link_body) const {
@@ -273,6 +277,7 @@ namespace emp {
     }
 
     bool HasOwner() const { return has_owner; }
+    bool HasShape() const { return has_shape; }
 
     // TODO: configure body function?
     // TODO: expose useful shape functions
@@ -345,7 +350,6 @@ namespace emp {
     void FinalizePosition(const Point<double> & max_coords) {
       const double max_x = max_coords.GetX() - shape_ptr->GetRadius();
       const double max_y = max_coords.GetY() - shape_ptr->GetRadius();
-
       cum_shift += shift;
       if (cum_shift.SquareMagnitude() > 0.25) {
         shape_ptr->Translate(cum_shift);
@@ -370,7 +374,6 @@ namespace emp {
         shape_ptr->Translate(-dist_move);
         link->to->GetShapePtr()->Translate(dist_move);
       }
-
       // Adjust the organism so it stays within the bounding box of the world.
       if (shape_ptr->GetCenterX() < shape_ptr->GetRadius()) {
         shape_ptr->SetCenterX(shape_ptr->GetRadius());

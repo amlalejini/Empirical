@@ -106,6 +106,7 @@ namespace emp {
             continue;
           // If the Owner of the shape's destruction has been flagged, remove the shape.
           } else if (surface_shapes[cur_id]->GetOwnerPtr()->GetDestroyFlag()) {
+            surface_shapes[cur_id]->GetOwnerPtr()->RemoveAllLinks();
             surface_shapes[cur_id]->GetOwnerPtr()->DetachShape();
             delete surface_shapes[cur_id];
             cur_size--;
@@ -113,7 +114,7 @@ namespace emp {
             continue;
           // Everything is okay, go ahead and update body.
           } else {
-            surface_shapes[cur_id]->GetOwnerPtr()->BodyUpdate(f, 0.25); // TODO: get rid of magic number for change rate.
+            surface_shapes[cur_id]->GetOwnerPtr()->BodyUpdate(f, 0.5); // TODO: get rid of magic number for change rate.
             if (surface_shapes[cur_id]->GetRadius() > max_radius)
               max_radius = surface_shapes[cur_id]->GetRadius();
             cur_id++;
@@ -185,12 +186,13 @@ namespace emp {
         int cur_size = (int) surface_shapes.size();
         int cur_id = 0;
         while (cur_id < cur_size) {
-          emp_assert(surface_shapes[cur_id] != nullptr && surface_shapes[cur_id].HasOwner());
+          emp_assert(surface_shapes[cur_id] != nullptr && surface_shapes[cur_id]->HasOwner());
           // If shape's body owner has been marked for destruction or exceeds its stress threshold,
           // detach shape from body and delete the shape.
           if (surface_shapes[cur_id]->GetOwnerPtr()->GetDestroyFlag() ||
               surface_shapes[cur_id]->GetOwnerPtr()->ExceedsStressThreshold()) {
-            surface_shapes[cur_id]->GetOwnerPtr()->MarkForDestruction(); // In case this wasn't already noted.
+            surface_shapes[cur_id]->GetOwnerPtr()->RemoveAllLinks();  // TODO: Discuss with Charles how everything is organized. Not sure how I feel about this. What memory should physics be responsible for?
+            surface_shapes[cur_id]->GetOwnerPtr()->MarkForDestruction(); // Mark that body should be destroyed.
             surface_shapes[cur_id]->GetOwnerPtr()->DetachShape();
             delete surface_shapes[cur_id];                // Delete the shape.
             cur_size--;
@@ -290,7 +292,10 @@ namespace emp {
       // Configure physics. This must be called if default constructor was
       // used when creating this.
       void ConfigPhysics(double width, double height, Random *r, double surface_friction) {
-        if (configured) { delete surface; }
+        if (configured) {
+          delete surface;
+          delete max_pos;
+        }
         collision_resolution_fun = [this](Body<Shape_t> * body1, Body<Shape_t> * body2)
                                    { this->DefaultCollisionResolution(body1, body2); };
         surface = new Surface_t(width, height, surface_friction);
@@ -322,7 +327,6 @@ namespace emp {
       CirclePhysics2D & AddBody(OWNER_TYPE * body_owner) {
         emp_assert(configured);
         Body<Shape_t> * body_ptr = body_owner->GetBodyPtr();
-        // TODO: double check with Charles that this does not have adverse effects in population manager.
         body_ptr->AttachTrackedOwner(body_owner_tt.template New<OWNER_TYPE*>(body_owner));
         surface->AddShape(body_ptr->GetShapePtr());
         body_ptr->SetPhysicsBodyTypeID(GetTypeID(*body_owner));
