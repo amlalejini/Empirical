@@ -38,7 +38,6 @@
 // If repeats are passed in, things *should* work fine. But only the first surface of that type will ever
 // be used.
 
-// TODO: eventually make number of surfaces generic
 namespace emp {
 
   // Struct used to pass around collision information.
@@ -305,7 +304,6 @@ namespace emp {
       }
 
       // Callback registration.
-      // TODO: Ensure that this interface is consistent with the rest of Empirical.
       void RegisterOnUpdateCallback(std::function<void()> callback) {
         on_update_sig.AddAction(callback);
       }

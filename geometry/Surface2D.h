@@ -46,8 +46,8 @@ namespace emp {
       : max_pos(_width, _height),
         friction(surface_friction)
     { ; }
-    // TODO: look into this 'throw()'; why needed?
-    ~Surface2D() throw() {
+
+    ~Surface2D() {
       Clear();
     }
 

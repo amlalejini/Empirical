@@ -286,7 +286,6 @@ namespace emp {
     bool HasShape() const { return has_shape; }
 
     // TODO: configure body function?
-    // TODO: expose useful shape functions
     const Angle & GetOrientation() const { return shape_ptr->GetOrientation(); }
     const Point<double> & GetAnchor() const override { return shape_ptr->GetCenter(); }
     const uint32_t GetColorID() const { return shape_ptr->GetColorID(); }
