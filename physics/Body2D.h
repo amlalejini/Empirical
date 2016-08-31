@@ -34,8 +34,11 @@
 #include <functional>
 
 namespace emp {
+
+  class Body2D_Base;
   // TODO: Discuss the fate of BODY_LINK_TYPE. Should we still be using this? Or is there something
   //  better?
+  //  * We need a way to handle different types of links.
   // Bodies can be linked in several ways.
   // DEFAULT -> Joined together with no extra meaning
   // REPRODUCTION -> "from" is gestating "to"
@@ -44,25 +47,25 @@ namespace emp {
   // CONSUME_RESOURCE -> "from" is eating "to" where "from" is an organism and "to" is a resource.
   enum class BODY_LINK_TYPE { DEFAULT, REPRODUCTION, ATTACK, PARASITE, CONSUME_RESOURCE };
 
+  struct BodyLink {
+    using BODY_TYPE = Body2D_Base;
+    BODY_LINK_TYPE type;   // DEFAULT, REPRODUCTION, ATTACK, PARASITE
+    BODY_TYPE * from;      // Initiator of the connection (e.g., parent, attacker)
+    BODY_TYPE * to;        // Target of the connection (e.g., offspring, prey/host)
+    double cur_dist;       // How far are bodies currently being kept apart?
+    double target_dist;    // How far should the be moved to? (e.g., if growing)
+    double link_strength;  // How strong is the link? (used to determine who wins in competive links)
+    bool flag_for_removal; // Should this link be removed during link update phase of body update?
+    BodyLink() : type(BODY_LINK_TYPE::DEFAULT), from(nullptr), to(nullptr), cur_dist(0)
+               , target_dist(0), link_strength(0), flag_for_removal(false) { ; }
+    BodyLink(BODY_LINK_TYPE t, BODY_TYPE * _frm, BODY_TYPE * _to, double cur=0, double target=0, double lnk_str=0)
+      : type(t), from(_frm), to(_to), cur_dist(cur), target_dist(target), link_strength(lnk_str), flag_for_removal(false) { ; }
+    BodyLink(const BodyLink &) = default;
+    ~BodyLink() { ; }
+  };
+
   class Body2D_Base {
   protected:
-    struct BodyLink {
-      using BODY_TYPE = Body2D_Base;
-      BODY_LINK_TYPE type;   // DEFAULT, REPRODUCTION, ATTACK, PARASITE
-      BODY_TYPE * from;      // Initiator of the connection (e.g., parent, attacker)
-      BODY_TYPE * to;        // Target of the connection (e.g., offspring, prey/host)
-      double cur_dist;       // How far are bodies currently being kept apart?
-      double target_dist;    // How far should the be moved to? (e.g., if growing)
-      double link_strength;  // How strong is the link? (used to determine who wins in competive links)
-
-      BodyLink() : type(BODY_LINK_TYPE::DEFAULT), from(nullptr), to(nullptr), cur_dist(0)
-                 , target_dist(0), link_strength(0) { ; }
-      BodyLink(BODY_LINK_TYPE t, BODY_TYPE * _frm, BODY_TYPE * _to, double cur=0, double target=0, double lnk_str=0)
-        : type(t), from(_frm), to(_to), cur_dist(cur), target_dist(target), link_strength(lnk_str) { ; }
-      BodyLink(const BodyLink &) = default;
-      ~BodyLink() { ; }
-    };
-
     // Body properties.
     Point<double> velocity; // Speed and direction of movement.
     double mass;
@@ -78,6 +81,7 @@ namespace emp {
 
     Signal<Body2D_Base*> on_collision_sig;
     Signal<> on_destruction_sig;
+    Signal<BodyLink *> on_link_update_sig;
 
     int physics_body_id;  // ID used by physics to identify the body type.
 
@@ -144,6 +148,9 @@ namespace emp {
     virtual void RegisterOnDestructionCallback(std::function<void()> callback) {
       on_destruction_sig.AddAction(callback);
     }
+    virtual void RegisterOnLinkUpdateCallback(std::function<void(BodyLink*)> callback) {
+      on_link_update_sig.AddAction(callback);
+    }
 
     // Creating, testing, and unlinking other organisms.
     virtual bool IsLinkedFrom(const Body2D_Base & link_body) const {
@@ -206,7 +213,6 @@ namespace emp {
       }
       return links;
     }
-
     virtual emp::vector<BodyLink *> GetLinksFromByType(BODY_LINK_TYPE link_type) {
       emp::vector<BodyLink *> links;
       for (auto *link : this->from_links) {
@@ -324,9 +330,14 @@ namespace emp {
       }
 
       // Update links.
+      // TODO: @amlalejini: do we want signals for link updates? -- so many places that shared_ptrs would be nice...
       for (int i = 0; i < (int) from_links.size(); i++) {
         auto * link = from_links[i];
-        // Here's where we should sever REPRO links.
+        on_link_update_sig.Trigger(link);
+        if (link->flag_for_removal) {
+          RemoveLink(link);
+          i--; continue;
+        }
         if (link->cur_dist == link->target_dist) continue;  // No adjustment needed.
         // If we're within the change_factor, just set the pair_dist to target.
         if (std::abs(link->cur_dist - link->target_dist) <= change_factor) {
