@@ -7,7 +7,11 @@
 //  if a program is compiled with EMP_TRACK_MEM set, then these pointers perform extra
 //  tests to ensure that they point to valid memory and that memory is freed before
 //  pointers are released.
-
+//
+//  Developer Notes:
+//  * Switch pointer tracking to unordered_map?  (shouild be faster and smaller)
+//  * Add on tracking for arrays (to allow indexing and know when to call delete[])
+//  * Make operator delete (and operator new?) work with Ptr.
 
 #ifndef EMP_PTR_H
 #define EMP_PTR_H
@@ -63,16 +67,17 @@ namespace emp {
   };
 
 
-  template <typename TYPE>
   class PtrTracker {
   private:
-    std::map<TYPE *, PtrInfo> ptr_count;
+    std::map<void *, PtrInfo> ptr_info;
     bool verbose;
 
-    // Make sure trackers can't be built outside of this class.
-    PtrTracker() : verbose (false) { ; }
-    PtrTracker(const PtrTracker<int> &) = delete;
-    PtrTracker<int> & operator=(const PtrTracker<TYPE> &) = delete;
+    // Make PtrTracker a singleton.
+    PtrTracker() : verbose(false) { ; }
+    PtrTracker(const PtrTracker &) = delete;
+    PtrTracker(PtrTracker &&) = delete;
+    PtrTracker & operator=(const PtrTracker &) = delete;
+    PtrTracker & operator=(PtrTracker &&) = delete;
   public:
     ~PtrTracker() { ; }
 
@@ -80,57 +85,61 @@ namespace emp {
     void SetVerbose(bool v=true) { verbose = v; }
 
     // Treat this class as a singleton with a single Get() method to retrieve it.
-    static PtrTracker<TYPE> & Get() { static PtrTracker<TYPE> tracker; return tracker; }
+    static PtrTracker & Get() { static PtrTracker tracker; return tracker; }
 
     // Some simple accessors
-    bool HasPtr(TYPE * ptr) const {
+    bool HasPtr(void * ptr) const {
       if (verbose) std::cout << "HasPtr: " << ((uint64_t) ptr) << std::endl;
-      return ptr_count.find(ptr) != ptr_count.end();
+      return ptr_info.find(ptr) != ptr_info.end();
     }
-    bool IsActive(TYPE * ptr) const {
+    bool IsActive(void * ptr) const {
       if (verbose) std::cout << "Active: " << ((uint64_t) ptr) << std::endl;
       if (!HasPtr(ptr)) return false;
-      return ptr_count.find(ptr)->second.IsActive();
+      return ptr_info.find(ptr)->second.IsActive();
     }
-    bool IsOwner(TYPE * ptr) const {
+    bool IsOwner(void * ptr) const {
       if (verbose) std::cout << "Owner:  " << ((uint64_t) ptr) << std::endl;
       if (!HasPtr(ptr)) return false;
-      return ptr_count.find(ptr)->second.IsOwner();
+      return ptr_info.find(ptr)->second.IsOwner();
     }
-    int GetCount(TYPE * ptr) const {
+    int GetCount(void * ptr) const {
       if (verbose) std::cout << "Count:  " << ((uint64_t) ptr) << std::endl;
       if (!HasPtr(ptr)) return 0;
-      return ptr_count.find(ptr)->second.GetCount();
+      return ptr_info.find(ptr)->second.GetCount();
     }
 
     // This pointer was just created as a Ptr!
-    void New(TYPE * ptr) {
+    void New(void * ptr) {
+      if (ptr == nullptr) return;
       if (verbose) std::cout << "New:    " << ((uint64_t) ptr) << std::endl;
       emp_assert(!HasPtr(ptr) || !IsActive(ptr)); // Make sure pointer is not already stored!
-      ptr_count[ptr] = PtrInfo(true);
+      ptr_info[ptr] = PtrInfo(true);
     }
 
     // This pointer was already created, but given to Ptr.
-    void Old(TYPE * ptr) {
+    void Old(void * ptr) {
+      if (ptr == nullptr) return;
       if (verbose) std::cout << "Old:    " << ((uint64_t) ptr) << std::endl;
       // If we already have this pointer, just increment the count.  Otherwise track it now.
       if (HasPtr(ptr) && IsActive(ptr)) Inc(ptr);
-      else ptr_count[ptr] = PtrInfo(false);
+      else ptr_info[ptr] = PtrInfo(false);
     }
-    void Inc(TYPE * ptr) {
+    void Inc(void * ptr) {
+      if (ptr == nullptr) return;
       if (verbose) std::cout << "Inc:    " << ((uint64_t) ptr) << std::endl;
       emp_assert(HasPtr(ptr));  // Make sure pointer IS already stored!
-      ptr_count[ptr].Inc();
+      ptr_info[ptr].Inc();
     }
-    void Dec(TYPE * ptr) {
+    void Dec(void * ptr) {
+      if (ptr == nullptr) return;
       if (verbose) std::cout << "Dec:    " << ((uint64_t) ptr) << std::endl;
       emp_assert(HasPtr(ptr));  // Make sure pointer IS already stored!
-      ptr_count[ptr].Dec();
+      ptr_info[ptr].Dec();
     }
-    void MarkDeleted(TYPE * ptr) {
+    void MarkDeleted(void * ptr) {
       if (verbose) std::cout << "Delete: " << ((uint64_t) ptr) << std::endl;
       emp_assert(HasPtr(ptr));  // Make sure pointer IS already stored!
-      ptr_count[ptr].MarkDeleted();
+      ptr_info[ptr].MarkDeleted();
     }
   };
 
@@ -148,20 +157,32 @@ namespace emp {
     TYPE * ptr;
 
 #ifdef EMP_TRACK_MEM
-    static PtrTracker<TYPE> & Tracker() {
-      return PtrTracker<TYPE>::Get();
-    }
+    static PtrTracker & Tracker() { return PtrTracker::Get(); }
 #endif
   public:
     Ptr() : ptr(nullptr) { ; }
-    Ptr(TYPE * in_ptr, bool is_new=true) : ptr(in_ptr) {
+    template <typename T2> Ptr(T2 * in_ptr, bool is_new=true) : ptr(in_ptr) {
+      (void) is_new;  // Avoid unused parameter error when EMP_IF_MEMTRACK is off.
       EMP_IF_MEMTRACK( if (is_new) Tracker().New(ptr); else Tracker().Old(ptr); );
     }
-    Ptr(TYPE & obj) : Ptr(&obj, false) {;}  // Pre-existing objects are NOT tracked.
+    template <typename T2> Ptr(Ptr<T2> _in) : ptr(_in.Raw()) {
+      EMP_IF_MEMTRACK( Tracker().Inc(ptr); );
+    }
+    Ptr(std::nullptr_t) : Ptr() { ; }
+    Ptr(TYPE & obj) : Ptr(&obj, false) {;} // Pre-existing objects NOT tracked
     Ptr(const Ptr<TYPE> & _in) : ptr(_in.ptr) { EMP_IF_MEMTRACK( Tracker().Inc(ptr); ); }
+    Ptr(Ptr<TYPE> && _in) : ptr(_in.ptr) { _in.ptr=nullptr; }
     ~Ptr() { EMP_IF_MEMTRACK( Tracker().Dec(ptr); ); }
 
     bool IsNull() const { return ptr == nullptr; }
+    TYPE * Raw() { return ptr; }
+    const TYPE * const Raw() const { return ptr; }
+    template <typename T2> T2 * Cast() { return (T2*) ptr; }
+    template <typename T2> const T2 * const Cast() const { return (T2*) ptr; }
+    template <typename T2> T2 * DynamicCast() {
+      emp_assert(dynamic_cast<T2>(ptr) != nullptr);
+      return (T2*) ptr;
+    }
 
     void New() {
       EMP_IF_MEMTRACK( if (ptr) Tracker().Dec(ptr); );
@@ -186,21 +207,43 @@ namespace emp {
       delete ptr;
     }
 
-    Ptr<TYPE> & operator=(const Ptr<TYPE> & _in) {
+    template <typename T2>
+    Ptr<TYPE> & operator=(T2 * _in) {
       EMP_IF_MEMTRACK( if (ptr) Tracker().Dec(ptr); );
-      ptr=_in.ptr;
+      ptr = _in;
+      EMP_IF_MEMTRACK(Tracker().New(ptr););
+      return *this;
+    }
+    template <typename T2>
+    Ptr<TYPE> & operator=(Ptr<T2> _in) {
+      EMP_IF_MEMTRACK( if (ptr) Tracker().Dec(ptr); );
+      ptr=_in.Raw();
       EMP_IF_MEMTRACK(Tracker().Inc(ptr););
+      return *this;
+    }
+    Ptr<TYPE> & operator=(Ptr<TYPE> & _in) {
+      EMP_IF_MEMTRACK( if (ptr) Tracker().Dec(ptr); );
+      ptr=_in.Raw();
+      EMP_IF_MEMTRACK(Tracker().Inc(ptr););
+      return *this;
+    }
+    Ptr<TYPE> & operator=(Ptr<TYPE> && _in) {
+      ptr = _in.ptr;
+      _in.ptr = nullptr;
       return *this;
     }
     TYPE & operator*() { return *ptr; }
     TYPE * operator->() { return ptr; }
+    const TYPE * const operator->() const { return ptr; }
     operator TYPE *() { return ptr; }
+    operator bool() { return ptr != nullptr; }
 
     // Allow Ptr to be treated as an array?
     // @CAO commented out for now; would need to track array status to call delete[]
     // TYPE & operator[](int pos) { return ptr[pos]; }
     // const TYPE & operator[](int pos) const { return ptr[pos]; }
 
+    // Comparisons to other Ptr objects
     bool operator==(const Ptr<TYPE> & in_ptr) const { return ptr == in_ptr.ptr; }
     bool operator!=(const Ptr<TYPE> & in_ptr) const { return ptr != in_ptr.ptr; }
     bool operator<(const Ptr<TYPE> & in_ptr)  const { return ptr < in_ptr.ptr; }
@@ -208,12 +251,26 @@ namespace emp {
     bool operator>(const Ptr<TYPE> & in_ptr)  const { return ptr > in_ptr.ptr; }
     bool operator>=(const Ptr<TYPE> & in_ptr) const { return ptr >= in_ptr.ptr; }
 
+    // Comparisons to raw pointers.
+    bool operator==(const TYPE * in_ptr) const { return ptr == in_ptr; }
+    bool operator!=(const TYPE * in_ptr) const { return ptr != in_ptr; }
+    bool operator<(const TYPE * in_ptr)  const { return ptr < in_ptr; }
+    bool operator<=(const TYPE * in_ptr) const { return ptr <= in_ptr; }
+    bool operator>(const TYPE * in_ptr)  const { return ptr > in_ptr; }
+    bool operator>=(const TYPE * in_ptr) const { return ptr >= in_ptr; }
+
     // Some debug testing functions
 #ifdef EMP_TRACK_MEM
     int DebugGetCount() const { return Tracker().GetCount(ptr); }
 #endif
 
   };
+
+
+    // Create a helper to replace & operator.
+    template <typename T> Ptr<T> to_ptr(T & _in) { return Ptr<T>(_in); }
+    template <typename T> Ptr<T> to_ptr(T * _in, bool own=false) { return Ptr<T>(_in, own); }
+    template <typename T> Ptr<T> new_ptr(T * _in, bool own=true) { return Ptr<T>(_in, own); }
 
 }
 
