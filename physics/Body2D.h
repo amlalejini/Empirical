@@ -83,8 +83,6 @@ namespace emp {
     Signal<> on_destruction_sig;
     Signal<BodyLink *> on_link_update_sig;
 
-    int physics_body_id;  // ID used by physics to identify the body type.
-
     // Information about other bodies that this body is linked to.
     emp::vector<BodyLink*> from_links;  // Active links initiated by body.
     emp::vector<BodyLink*> to_links;    // Active links targeting body.
@@ -100,7 +98,7 @@ namespace emp {
       to_links.pop_back();
     }
 
-    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0), destroy(false), physics_body_id(-1) { ; }
+    Body2D_Base() : mass(1.0), inv_mass(1 / mass), pressure(0.0), max_pressure(1.0), destroy(false) { ; }
 
   public:
     virtual ~Body2D_Base() {
@@ -111,7 +109,6 @@ namespace emp {
     virtual Shape * GetShapePtr() = 0;
     virtual Shape & GetShape() = 0;
     virtual const Shape & GetConstShape() const = 0;
-    virtual int GetPhysicsBodyTypeID() const { return physics_body_id; }
 
     virtual const Point<double> & GetVelocity() const { return velocity; }
     virtual const Point<double> & GetAnchor() const = 0;
@@ -128,7 +125,6 @@ namespace emp {
     virtual void SetMass(double m) { mass = m; mass == 0.0 ? inv_mass = 0 : inv_mass = 1.0 / mass; }
     virtual void SetPressure(double p) { pressure = p; }
     virtual void SetMaxPressure(double mp) { max_pressure = mp; }
-    virtual void SetPhysicsBodyTypeID(int id) { physics_body_id = id; }
     virtual void MarkForDestruction() { destroy = true; }
 
     virtual void IncSpeed(const Point<double> & offset) { velocity += offset; }
@@ -272,9 +268,7 @@ namespace emp {
     Shape_t * GetShapePtr() override { return shape_ptr; }
     Shape_t & GetShape() override { return *shape_ptr; }
     const Shape_t & GetConstShape() const override { return *shape_ptr; }
-    // OWNER_TYPE * GetBodyOwnerPtr() { return owner_ptr; }
-    // OWNER_TYPE & GetBodyOwner() { return owner_ptr; }
-    // const OWNER_TYPE & GetConstBodyOwner() { return owner_ptr; }
+
     TrackedType * GetTrackedOwnerPtr() { return tracked_owner; }
 
     template<typename BODY_OWNER, int TRACKER_ID>
@@ -400,9 +394,7 @@ namespace emp {
         velocity.NegateY();
       }
     }
-
   };
-
 }
 
 #endif

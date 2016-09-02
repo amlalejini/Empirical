@@ -273,14 +273,22 @@ namespace emp {
       template <typename T>
       constexpr static int GetTypeID(const T &) { return get_type_index<T, BODY_OWNERS...>(); }
 
+      // Given a body and a BODY_OWNER type, is the body's owner of type BODY_OWNER?
+      template <typename BODY_OWNER>
+      bool IsBodyOwnerType(Body<Shape_t> *body) {
+        return body_owner_tt.template IsType<BODY_OWNER*>(*(body->GetTrackedOwnerPtr()));
+      }
+      // Cast body to type BODY_OWNER.
+      template <typename BODY_OWNER>
+      BODY_OWNER * ToBodyOwnerType(Body<Shape_t> *body) {
+        return body_owner_tt.template ToType<BODY_OWNER*>(*(body->GetTrackedOwnerPtr()));
+      }
+
       double GetWidth() const { emp_assert(configured); return max_pos->GetX(); }
       double GetHeight() const { emp_assert(configured); return max_pos->GetY(); }
       Surface_t * GetSurfacePtr() { return surface; }
       Surface_t & GetSurface() { return *surface; }
       const Surface_t & GetConstSurface() const { return *surface; }
-
-      // emp::vector<Surface*> & GetSurfaceSet() { return surface_set; }
-      // const emp::vector<Surface*> & GetConstSurfaceSet() const { return surface_set; }
 
       CirclePhysics2D & Clear() {
         surface->Clear();
@@ -327,7 +335,6 @@ namespace emp {
         Body<Shape_t> * body_ptr = body_owner->GetBodyPtr();
         body_ptr->AttachTrackedOwner(body_owner_tt.template New<OWNER_TYPE*>(body_owner));
         surface->AddShape(body_ptr->GetShapePtr());
-        body_ptr->SetPhysicsBodyTypeID(GetTypeID(*body_owner));
         body_ptr->SetShapeResponsibility(false); // Physics will be responsible for shapes.
         return *this;
       }
