@@ -18,6 +18,7 @@
 #include "../tools/DynamicStringSet.h"
 #include "../tools/FunctionSet.h"
 #include "../tools/Graph.h"
+#include "../tools/NFA.h"
 #include "../tools/Ptr.h"
 #include "../tools/Random.h"
 // #include "../tools/Trait.h"
@@ -32,6 +33,7 @@
 #include "../tools/macro_math.h"
 #include "../tools/macros.h"
 #include "../tools/map_utils.h"
+#include "../tools/math.h"
 #include "../tools/mem_track.h"
 #include "../tools/meta.h"
 #include "../tools/reflection.h"
@@ -325,13 +327,13 @@ TEST_CASE("Test DFA", "[tools]")
   dfa.SetTransition(0, 3, 'b');
 
   int state = 0;
-  std::cout << (state = dfa.Next(state, 'a')) << std::endl;
-  std::cout << (state = dfa.Next(state, 'a')) << std::endl;
-  std::cout << (state = dfa.Next(state, 'a')) << std::endl;
-  std::cout << (state = dfa.Next(state, 'b')) << std::endl;
-  std::cout << (state = dfa.Next(state, 'b')) << std::endl;
-  std::cout << (state = dfa.Next(state, 'b')) << std::endl;
-  std::cout << (state = dfa.Next(state, 'b')) << std::endl;
+  REQUIRE( (state = dfa.Next(state, 'a')) == 1 );
+  REQUIRE( (state = dfa.Next(state, 'a')) == 2 );
+  REQUIRE( (state = dfa.Next(state, 'a')) == 0 );
+  REQUIRE( (state = dfa.Next(state, 'b')) == 3 );
+  REQUIRE( (state = dfa.Next(state, 'b')) == -1 );
+  REQUIRE( (state = dfa.Next(state, 'b')) == -1 );
+  REQUIRE( (state = dfa.Next(state, 'b')) == -1 );
 
   REQUIRE(dfa.Next(0, "aaaaaab") == 3);
   REQUIRE(dfa.Next(0, "aaaaab") == -1);
@@ -892,6 +894,19 @@ TEST_CASE("Test map_utils", "[tools]")
   REQUIRE( emp::Has(flipped, 'x') == false);
 }
 
+TEST_CASE("Test math", "[tools]")
+{
+  constexpr auto a1 = emp::Log2(3.14);           REQUIRE( a1 > 1.650);   REQUIRE( a1 < 1.651);
+  constexpr auto a2 = emp::Log2(0.125);          REQUIRE( a2 == -3.0 );
+  constexpr auto a3 = emp::Log(1000, 10);        REQUIRE( a3 == 3.0 );
+  constexpr auto a4 = emp::Log(10, 1000);        REQUIRE( a4 > 0.333 );  REQUIRE( a4 < 0.334 );
+  constexpr auto a5 = emp::Log10(100);           REQUIRE( a5 == 2.0 );
+  constexpr auto a6 = emp::Ln(3.33);             REQUIRE( a6 > 1.202 );  REQUIRE( a6 < 1.204 );
+  constexpr auto a7 = emp::Pow2(2.345);          REQUIRE( a7 > 5.080 );  REQUIRE( a7 < 5.081 );
+  constexpr auto a8 = emp::Pow(emp::PI, emp::E); REQUIRE( a8 > 22.440 ); REQUIRE( a8 < 22.441 );
+}
+
+
 struct TestClass1 {
   TestClass1() {
     EMP_TRACK_CONSTRUCT(TestClass1);
@@ -981,6 +996,52 @@ TEST_CASE("Test meta-programming helpers", "[tools]")
   REQUIRE( meta2.b == true );
   REQUIRE( meta3.a == "65.5" );
   REQUIRE( meta3.b == 65.5 );
+}
+
+TEST_CASE("Test NFA", "[tools]")
+{
+  emp::NFA nfa(10);
+  nfa.AddTransition(0, 1, 'a');
+  nfa.AddTransition(0, 2, 'a');
+  nfa.AddTransition(0, 3, 'a');
+  nfa.AddTransition(0, 4, 'a');
+
+  nfa.AddTransition(1, 2, 'b');
+  nfa.AddTransition(2, 3, 'c');
+  nfa.AddTransition(3, 4, 'd');
+
+  nfa.AddTransition(0, 1, 'e');
+  nfa.AddTransition(0, 1, 'f');
+  nfa.AddTransition(0, 1, 'g');
+
+  nfa.AddTransition(2, 3, 'a');
+  nfa.AddTransition(3, 4, 'a');
+  nfa.AddTransition(2, 4, 'a');
+
+  nfa.AddTransition(2, 2, 'e');
+  nfa.AddTransition(3, 3, 'e');
+  nfa.AddTransition(4, 4, 'e');
+
+  nfa.AddFreeTransition(1,5);
+
+  nfa.AddTransition(5, 6, 'a');
+
+  nfa.AddFreeTransition(6,7);
+  nfa.AddFreeTransition(6,8);
+  nfa.AddFreeTransition(6,9);
+  nfa.AddFreeTransition(9,0);
+
+  emp::NFA_State state(nfa);
+  REQUIRE(state.GetSize() == 1);
+  state.Next('a');
+  REQUIRE(state.GetSize() == 5);
+  state.Next('a');
+  REQUIRE(state.GetSize() == 7);
+
+  emp::NFA_State state2(nfa);
+  REQUIRE(state2.GetSize() == 1);
+  state2.Next("aaaa");
+  REQUIRE(state2.GetSize() == 7);
 }
 
 TEST_CASE("Test Ptr", "[tools]")
