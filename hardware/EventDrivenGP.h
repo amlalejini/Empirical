@@ -47,7 +47,6 @@ namespace emp {
     static constexpr size_t MAX_CALL_DEPTH = 128;   // Maximum depth of calls per execution stack.
     static constexpr double DEFAULT_MEM_VALUE = 0.0;
     static constexpr double MIN_BIND_THRESH = 0.5;
-    static constexpr bool STOCHASTIC_FUN_CALL = true;
 
     using mem_key_t = int;
     using mem_val_t = double;
@@ -331,12 +330,13 @@ namespace emp {
     size_t errors;
 
     bool is_executing;    // This is true only when executing the execution stacks.
+    bool STOCHASTIC_FUN_CALL;
 
   public:
     EventDrivenGP(Ptr<const inst_lib_t> _ilib, Ptr<const event_lib_t> _elib, Ptr<Random> rnd=nullptr)
       : event_lib(_elib), random_ptr(rnd), random_owner(false), program(_ilib),
         shared_mem_ptr(nullptr), execution_stacks(), core_spawn_queue(), cur_core(nullptr),
-        event_queue(), traits(), errors(0), is_executing(false)
+        event_queue(), traits(), errors(0), is_executing(false), STOCHASTIC_FUN_CALL(true)
     {
       if (!rnd) NewRandom();
       shared_mem_ptr.New();
@@ -440,6 +440,7 @@ namespace emp {
       if (id >= traits.size()) traits.resize(id+1, 0.0);
       traits[id] = val;
     }
+    void SetStochasticFunctionCall(bool val) { STOCHASTIC_FUN_CALL = val; }
     void PushTrait(double val) { traits.push_back(val); }
     void SetInst(size_t fID, size_t pos, const inst_t & inst) {
       emp_assert(ValidPosition(fID, pos));

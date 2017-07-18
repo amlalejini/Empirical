@@ -35,14 +35,15 @@ constexpr size_t DIST_SYS_HEIGHT = 5;
 constexpr size_t GENERATIONS = 1000;
 constexpr int RAND_SEED = -1;
 
-constexpr double RESOURCE_AVAILABILITY = 0.3;
+constexpr double RESOURCE_AVAILABILITY = 0.5;
 constexpr size_t RESOURCE_NUM_TIME_CHUNKS = 40;
 
-constexpr size_t SLEEP_TIME = 10; // How many CPU cycles should sleep last?
+constexpr size_t SLEEP_TIME = 400; // How many CPU cycles should sleep last?
 constexpr size_t INIT_ENERGY = 50;
 
-constexpr size_t MAX_FUNC_LENGTH = 20;
+constexpr size_t MAX_FUNC_LENGTH = 30;
 constexpr size_t MAX_FUNC_CNT = 3;
+constexpr bool STOCHASTIC_FUN_CALL = true;
 
 // Virtual hardware trait IDs.
 constexpr size_t TRAIT_ID__X_LOC = 0;
@@ -53,6 +54,7 @@ constexpr size_t TRAIT_ID__RES_SENSOR = 4;
 constexpr size_t TRAIT_ID__RES_COLLECTED = 5;
 constexpr size_t TRAIT_ID__POIS_COLLECTED = 6;
 constexpr size_t TRAIT_ID__PROCESSED = 7;
+constexpr size_t TRAIT_ID__RES_MODIFIER = 8;
 
 
 // Mutation rates
@@ -95,11 +97,16 @@ struct Environment {
     chunks_avail((size_t)(_ravail * _nchunks)), res_availability(_nchunks, false)
   {
     for (size_t i = 0; i < chunks_avail; ++i) res_availability[i] = true;
-    RandomizeEnv();
+    //RandomizeEnv();
   }
 
   void RandomizeEnv() {
     emp::Shuffle(*rnd, res_availability);
+  }
+
+  void CycleEnv() {
+    size_t interval = num_chunks/chunks_avail;
+    for (size_t i = 0; i < num_chunks; ++i) res_availability[i] = !((bool)(i%interval));
   }
 
   /// Get Environment state at time t.
@@ -144,6 +151,8 @@ struct Deme {
       grid[i]->SetTrait(TRAIT_ID__RES_COLLECTED, 0);
       grid[i]->SetTrait(TRAIT_ID__POIS_COLLECTED, 0);
       grid[i]->SetTrait(TRAIT_ID__PROCESSED, 0);
+      grid[i]->SetTrait(TRAIT_ID__RES_MODIFIER, 0);
+      grid[i]->SetStochasticFunctionCall(STOCHASTIC_FUN_CALL);
     }
   }
 
@@ -167,6 +176,7 @@ struct Deme {
       grid[i]->SetTrait(TRAIT_ID__RES_COLLECTED, 0);
       grid[i]->SetTrait(TRAIT_ID__POIS_COLLECTED, 0);
       grid[i]->SetTrait(TRAIT_ID__PROCESSED, 0);
+      grid[i]->SetTrait(TRAIT_ID__RES_MODIFIER, 0);
     }
   }
 
@@ -259,9 +269,11 @@ struct Deme {
     emp_assert(agent_loaded);
     // For each agent: (Naive scheduler -- just loop through agents in order)
     deme_active = false;
+    size_t agents_processed = 0;
     for (size_t i = 0; i < grid.size(); ++i) {
       // Make resources available to this agent. (just 1)
       grid[i]->SetTrait(TRAIT_ID__PROCESSED, 0);
+      grid[i]->SetTrait(TRAIT_ID__RES_MODIFIER, agents_processed);
       // Enough energy to execute and not asleep?
       const double energy = grid[i]->GetTrait(TRAIT_ID__ENERGY);
       const int sleep_cnt = (int)grid[i]->GetTrait(TRAIT_ID__SLEEP_CNT);
@@ -270,6 +282,7 @@ struct Deme {
         grid[i]->SetTrait(TRAIT_ID__ENERGY, energy - 1);
         grid[i]->SingleProcess();
         deme_active = true;
+        if (grid[i]->GetTrait(TRAIT_ID__PROCESSED)) ++agents_processed; // If this agent processed anything, take note.
       } else if (energy > 0) {
         // If enough energy, but sleeping, dec sleep counter.
         grid[i]->SetTrait(TRAIT_ID__SLEEP_CNT, sleep_cnt - 1);
@@ -370,14 +383,17 @@ int main() {
     [&cur_time, &env](hardware_t & hw_src, const event_t & event) {
       if (hw_src.GetTrait(TRAIT_ID__PROCESSED) == 0) {
         hw_src.SetTrait(TRAIT_ID__PROCESSED, 1);
-        if (env.GetEnvState(cur_time))
-          hw_src.SetTrait(TRAIT_ID__RES_COLLECTED, hw_src.GetTrait(TRAIT_ID__RES_COLLECTED)+1.0);
-        else
+        if (env.GetEnvState(cur_time)) {
+          const size_t res_modifier = hw_src.GetTrait(TRAIT_ID__RES_MODIFIER);
+          hw_src.SetTrait(TRAIT_ID__RES_COLLECTED, hw_src.GetTrait(TRAIT_ID__RES_COLLECTED)+res_modifier+1.0);
+        } else {
           hw_src.SetTrait(TRAIT_ID__POIS_COLLECTED, hw_src.GetTrait(TRAIT_ID__POIS_COLLECTED)+1.0);
+        }
       }
     });
 
   std::cout << "Environment: " << std::endl;
+  env.CycleEnv();
   for (size_t i = 0; i < env.res_availability.size(); ++i)
     std::cout << env.res_availability[i] << " ";
   std::cout << std::endl;
@@ -490,10 +506,11 @@ int main() {
    [](Agent * agent) {
      return (double)agent->time_survived;
    };
-   std::function<double(Agent*)> fit_fun__res_pois2 =
-    [](Agent * agent) {
-      return (2*(double)agent->resources_collected) - (double)agent->poison_collected;
-    };
+   std::function<double(Agent*)> fit_fun =
+   [](Agent * agent) {
+     return (double)agent->resources_collected + (double)agent->time_survived - (double)agent->poison_collected;
+   };
+
    emp::vector< std::function<double(Agent*)> > fit_set(3);
    fit_set[0] = fit_fun__just_res;
    fit_set[1] = fit_fun__res_pois;
@@ -505,7 +522,6 @@ int main() {
   // Do the run...
   for (size_t ud = 0; ud < GENERATIONS; ++ud) {
     std::cout << "Update #" << ud << std::endl;
-    env.RandomizeEnv();
     for (size_t id = 0; id < POP_SIZE; ++id) {
       eval_deme.LoadAgent(world.popM[id]);
       for (cur_time = 0; cur_time < EVAL_TIME && eval_deme.IsActive(); ++cur_time) {
@@ -517,9 +533,9 @@ int main() {
       world[id].poison_collected = eval_deme.GetDemePoison();
     }
     // Keep the best agent.
-    world.EliteSelect(fit_fun__res_pois, 1, 1);
+    world.EliteSelect(fit_fun, 1, 1);
     // Run a tournament for the rest.
-    world.TournamentSelect(fit_fun__res_pois2, 8, POP_SIZE - 1);
+    world.TournamentSelect(fit_fun, 8, POP_SIZE - 1);
     //world.LexicaseSelect(fit_set, POP_SIZE - 1);
     // Update the world (generational turnover).
     world.Update();
@@ -527,7 +543,7 @@ int main() {
     world.MutatePop(1);
     // First agent is best of last generation, print fitness.
     // std::cout << "  RP score: " << fit_fun__res_pois(world.popM[0]) << std::endl;
-    std::cout << "  RP2 score: " << fit_fun__res_pois2(world.popM[0]) << std::endl;
+    std::cout << "  RP2 score: " << fit_fun(world.popM[0]) << std::endl;
     std::cout << "  R score: " << world[0].resources_collected << std::endl;
     std::cout << "  P score: " << world[0].poison_collected << std::endl;
     std::cout << "  T score: " << world[0].time_survived << std::endl;
@@ -536,7 +552,7 @@ int main() {
 
   std::cout << std::endl;
   std::cout << "Best program" << std::endl;
-  std::cout << "  RP2 score: " << fit_fun__res_pois2(world.popM[0]) << std::endl;
+  std::cout << "  RP2 score: " << fit_fun(world.popM[0]) << std::endl;
   std::cout << "  R score: " << world[0].resources_collected << std::endl;
   std::cout << "  P score: " << world[0].poison_collected << std::endl;
   std::cout << "  T score: " << world[0].time_survived << std::endl;
