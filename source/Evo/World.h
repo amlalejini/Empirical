@@ -528,6 +528,9 @@ namespace emp {
     /// Place multiple copies of a newborn organism into the population.
     void DoBirth(const ORG mem, size_t parent_pos, size_t copy_count);
 
+    /// Place a newborn organism into the population at the specified position.
+    void DoBirthAt(const ORG mem, size_t pos, size_t parent_pos);
+
     // Kill off organism at the specified position (same as RemoveOrgAt, but callable externally)
     void DoDeath(const size_t pos) { RemoveOrgAt(pos); }
 
@@ -966,6 +969,17 @@ namespace emp {
       org_placement_sig.Trigger(pos);
       // SetupOrg(*new_org, &callbacks, pos);
     }
+  }
+
+  // Give birth to a single offspring.
+  template <typename ORG>
+  void World<ORG>::DoBirthAt(const ORG mem, size_t pos, size_t parent_pos) {
+    before_repro_sig.Trigger(parent_pos);
+    Ptr<ORG> new_org = NewPtr<ORG>(mem);
+    offspring_ready_sig.Trigger(*new_org);
+    if (is_synchronous) AddNextOrgAt(new_org, pos, genotypes[parent_pos]);
+    else AddOrgAt(new_org, pos, genotypes[parent_pos]);
+    org_placement_sig.Trigger(pos);
   }
 
   template<typename ORG>
