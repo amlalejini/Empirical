@@ -21,6 +21,7 @@
  *  @todo IDEALLY: Make a single table that will look at what each cell is pointing to (table
  *     or text) and write out what it needs to, in place.
  *  @todo Add a ClearColumn method, as well as other column functionality.
+ *  @todo Add an operator[] to table that returns the appropriate row (and one to row for cell).
  */
 
 #ifndef EMP_WEB_TABLE_H
@@ -729,12 +730,17 @@ namespace web {
       return *this;
     }
   };
+}
+}
 
-  #include "_TableCell.h"
-  #include "_TableRow.h"
-  #include "_TableCol.h"
-  #include "_TableRowGroup.h"
-  #include "_TableColGroup.h"
+#include "_TableCell.h"
+#include "_TableRow.h"
+#include "_TableCol.h"
+#include "_TableRowGroup.h"
+#include "_TableColGroup.h"
+
+namespace emp {
+namespace web {
 
   // Fill out members of Table that require extra classes...
 

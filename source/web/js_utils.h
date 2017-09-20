@@ -1,9 +1,12 @@
-//  This file is part of Empirical, https://github.com/devosoft/Empirical
-//  Copyright (C) Michigan State University, 2015-2017.
-//  Released under the MIT Software license; see doc/LICENSE
-//
-//
-//  Tools for passing data between C++ and Javascript.
+/**
+ *  @note This file is part of Empirical, https://github.com/devosoft/Empirical
+ *  @copyright Copyright (C) Michigan State University, MIT Software license; see doc/LICENSE.md
+ *  @date 2015-2017
+ *
+ *  @file  js_utils.h
+ *  @brief Tools for passing data between C++ and Javascript.
+ */
+
 
 #ifndef EMP_JS_UTILS_H
 #define EMP_JS_UTILS_H
@@ -177,7 +180,7 @@ namespace emp {
       	std::string type_string = map_type_names[values[j].var_types[i].name()];
       	// Make sure member variable is an allowed type
       	emp_assert((map_type_names.find(values[j].var_types[i].name())
-      		    != map_type_names.end()));
+      		    != map_type_names.end()), values[j].var_types[i].name());
 
       	// Load data into array of objects
       	EM_ASM_ARGS({
@@ -297,7 +300,7 @@ namespace emp {
 
     //Figure out type stuff
     std::map<std::string, std::string> map_type_names = get_type_to_string_map();
-    emp_assert((map_type_names.find(typeid(T).name()) != map_type_names.end()));
+    emp_assert((map_type_names.find(typeid(T).name()) != map_type_names.end()), typeid(T).name());
     int type_size = sizeof(T);
     (void) type_size;
     std::string type_string = map_type_names[typeid(T).name()];
@@ -332,7 +335,7 @@ namespace emp {
 
     // Figure out type stuff
     std::map<std::string, std::string> map_type_names = get_type_to_string_map();
-    emp_assert((map_type_names.find(typeid(T).name()) != map_type_names.end()));
+    emp_assert((map_type_names.find(typeid(T).name()) != map_type_names.end()), typeid(T).name());
     int type_size = sizeof(T);
     (void) type_size;
     std::string type_string = map_type_names[typeid(T).name()];
@@ -359,10 +362,42 @@ namespace emp {
 
   /// @cond TEMPLATES
 
+
+  // template <typename T>
+  // typename std::enable_if<C::value_type::n_fields != -1, void>::type
+  // pass_vector_to_cpp(emp::vector<T> & arr, bool recurse = false) {
+  //
+  //   // Figure out type stuff
+  //   std::map<std::string, std::string> map_type_names = get_type_to_string_map();
+  //   emp_assert((map_type_names.find(typeid(T).name()) != map_type_names.end()), typeid(T).name());
+  //   int type_size = sizeof(T);
+  //   (void) type_size;
+  //   std::string type_string = map_type_names[typeid(T).name()];
+  //
+  //   // Write emp.__outgoing_array contents to a buffer
+  //   T * buffer = (T*) EM_ASM_INT({
+  //       var buffer = Module._malloc(emp_i.__outgoing_array.length*$0);
+  //
+  //       for (i=0; i<emp_i.__outgoing_array.length; i++) {
+  //         setValue(buffer+(i*$0), emp_i.__outgoing_array[i], Pointer_stringify($1));
+  //       }
+  //
+  //       return buffer;
+  //   }, type_size, type_string.c_str());
+  //
+  //   // Populate array from buffer
+  //   for (int i=0; i < EM_ASM_INT_V({return emp_i.__outgoing_array.length}); i++) {
+  //     arr.push_back(*(buffer + i));
+  //   }
+  //
+  //   //Free the memory we allocated in Javascript
+  //   free(buffer);
+  // }
+
   // Chars aren't one of the types supported by setValue, but by treating them
   // as strings in Javascript we can pass them out to a C++ array
   template <std::size_t SIZE>
-    void pass_array_to_cpp(std::array<char, SIZE> & arr, bool recurse = false) {
+  void pass_array_to_cpp(std::array<char, SIZE> & arr, bool recurse = false) {
 
     emp_assert(arr.size() == EM_ASM_INT_V({return emp_i.__outgoing_array.length}));
 
@@ -480,7 +515,7 @@ namespace emp {
 
   // We can handle nested arrays through recursive calls on chunks of them
   template <std::size_t SIZE, std::size_t SIZE2, typename T>
-    void pass_array_to_cpp(std::array<std::array<T, SIZE2>, SIZE> & arr, bool recurse = false) {
+  void pass_array_to_cpp(std::array<std::array<T, SIZE2>, SIZE> & arr, bool recurse = false) {
 
     emp_assert(arr.size() == EM_ASM_INT_V({return emp_i.__outgoing_array.length}));
 
@@ -505,9 +540,9 @@ namespace emp {
     else { EM_ASM({emp_i.__temp_array.pop();}); }
   }
 
-  // We can handle nested arrays through recursive calls on chunks of them
+  /// We can handle nested arrays through recursive calls on chunks of them
   template <typename T>
-    void pass_vector_to_cpp(emp::vector<emp::vector<T> > & arr, bool recurse = false) {
+  void pass_vector_to_cpp(emp::vector<emp::vector<T> > & arr, bool recurse = false) {
 
     // Create temp array to hold whole array while pieces are passed in
     int size = EM_ASM_INT_V({return emp_i.__outgoing_array.length});
