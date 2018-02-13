@@ -26,6 +26,7 @@
 //  * @amlalejini - TODO:
 //   [ ] operator= overrides.
 //   [ ] Add in warnings about 'no actively running core' if active_cores.size() == 0 (can happen post-ResetHardware())
+//   [ ] Decouple function reference modifiers from functions themselves.
 
 namespace emp {
 
@@ -301,11 +302,12 @@ namespace emp {
     ///   * affinity: Function affinity. Analogous to the function's name.
     ///   * inst_seq: Instruction sequence. Sequence of instructions that make up the function.
     struct Function {
-      affinity_t affinity;          //< Function affinity. Analogous to the function's name.
-      inst_seq_t inst_seq;          //< Instruction sequence. Sequence of instructions that make up the function.
+      affinity_t affinity;          ///< Function affinity. Analogous to the function's name.
+      inst_seq_t inst_seq;          ///< Instruction sequence. Sequence of instructions that make up the function.
+      double reference_modifier;    ///< Modifies function's similarity score for referencing. Allows up/down regulation of functions.
 
       Function(const affinity_t & _aff=affinity_t(), const inst_seq_t & _seq=inst_seq_t())
-        : affinity(_aff), inst_seq(_seq) { ; }
+        : affinity(_aff), inst_seq(_seq), reference_modifier(1.0) { ; }
 
       inst_t & operator[](size_t id) { return inst_seq[id]; }
       const inst_t & operator[](size_t id) const { return inst_seq[id]; }
@@ -318,6 +320,8 @@ namespace emp {
       size_t GetSize() const { return inst_seq.size(); }
 
       affinity_t & GetAffinity() { return affinity; }
+
+      double GetRefModifier() const { return reference_modifier; }
 
       void PushInst(size_t id, arg_t a0, arg_t a1, arg_t a2, const affinity_t & aff) {
         inst_seq.emplace_back(id, a0, a1, a2, aff);
@@ -334,6 +338,8 @@ namespace emp {
       void SetInst(size_t pos, const inst_t & inst) {
         inst_seq[pos].Set(inst);
       }
+
+      void SetRefModifier(double mod) { reference_modifier = mod; }
 
     };
 
@@ -597,25 +603,26 @@ namespace emp {
     using fun_event_handler_t = std::function<void(EventDrivenGP_t &, const event_t &)>;
 
   protected:
-    Ptr<const event_lib_t> event_lib;     //< Pointer to const event library associated with this hardware.
-    Ptr<Random> random_ptr;               //< Pointer to random object to use.
-    bool random_owner;                    //< Does this hardware own it's random object? (necessary for cleanup responsibility resolution)
-    program_t program;                    //< Hardware's associated program (set of functions).
-    memory_t shared_mem;                  //< Hardware's shared memory map. All cores have access to the same shared memory.
-    std::deque<event_t> event_queue;      //< Hardware's event queue. Where events go to be handled (in order of reception).
-    emp::vector<double> traits;           //< Generic traits vector. Whatever uses the hardware must define/keep track of what traits mean.
-    size_t errors;                        //< Errors committed by hardware while executing. (e.g. divide by 0, etc.)
-    size_t max_cores;                     //< Maximum number of parallel execution stacks that can be spawned. Increasing this value drastically slows things down.
-    size_t max_call_depth;                //< Maximum depth of calls per execution stack.
-    double default_mem_value;             //< Default value for memory access.
-    double min_bind_thresh;               //< Minimum bit string match threshold for function calls/event binding, etc.
-    bool stochastic_fun_call;             //< Are candidate function calls with == binding strength chosen stochastically?
-    emp::vector<exec_stk_t> cores;        //< Vector of cores. Not all will be active at all given points in time.
-    emp::vector<size_t> active_cores;     //< Vector of active core IDs. Maintains relative ordering or active cores.
-    emp::vector<size_t> inactive_cores;   //< Vector of inactive core IDs.
-    std::deque<size_t> pending_cores;     //< Queue of core IDs pending activation.
-    size_t exec_core_id;                  //< core ID of the currently executing core.
-    bool is_executing;                    //< True when mid-execution of all cores. (On every CPU cycle: execute all cores).
+    Ptr<const event_lib_t> event_lib;     ///< Pointer to const event library associated with this hardware.
+    Ptr<Random> random_ptr;               ///< Pointer to random object to use.
+    bool random_owner;                    ///< Does this hardware own it's random object? (necessary for cleanup responsibility resolution)
+    program_t program;                    ///< Hardware's associated program (set of functions).
+    memory_t shared_mem;                  ///< Hardware's shared memory map. All cores have access to the same shared memory.
+    std::deque<event_t> event_queue;      ///< Hardware's event queue. Where events go to be handled (in order of reception).
+    emp::vector<double> traits;           ///< Generic traits vector. Whatever uses the hardware must define/keep track of what traits mean.
+    size_t errors;                        ///< Errors committed by hardware while executing. (e.g. divide by 0, etc.)
+    size_t max_cores;                     ///< Maximum number of parallel execution stacks that can be spawned. Increasing this value drastically slows things down.
+    size_t max_call_depth;                ///< Maximum depth of calls per execution stack.
+    double default_mem_value;             ///< Default value for memory access.
+    double min_bind_thresh;               ///< Minimum bit string match threshold for function calls/event binding, etc.
+    bool stochastic_fun_call;             ///< Are candidate function calls with == binding strength chosen stochastically?
+    emp::vector<exec_stk_t> cores;        ///< Vector of cores. Not all will be active at all given points in time.
+    emp::vector<size_t> active_cores;     ///< Vector of active core IDs. Maintains relative ordering or active cores.
+    emp::vector<size_t> inactive_cores;   ///< Vector of inactive core IDs.
+    std::deque<size_t> pending_cores;     ///< Queue of core IDs pending activation.
+    size_t exec_core_id;                  ///< core ID of the currently executing core.
+    bool is_executing;                    ///< True when mid-execution of all cores. (On every CPU cycle: execute all cores).
+    bool enable_func_ref_modification;    ///< Allow function referencing (binding) to be modified?
 
     // TODO: disallow configuration of hardware while executing. (and any other functions that could sent things into a bad state)
 
@@ -633,7 +640,7 @@ namespace emp {
         default_mem_value(DEFAULT_MEM_VALUE), min_bind_thresh(DEFAULT_MIN_BIND_THRESH),
         stochastic_fun_call(true),
         cores(max_cores), active_cores(), inactive_cores(max_cores), pending_cores(),
-        exec_core_id(0), is_executing(false)
+        exec_core_id(0), is_executing(false), enable_func_ref_modification(false)
     {
       // If no random provided, create one.
       if (!rnd) NewRandom();
@@ -723,16 +730,18 @@ namespace emp {
       exec_core_id = (size_t)-1;
       errors = 0;
       is_executing = false;
+      // Reset function reference modifiers to 1.0
+      for (size_t i = 0; i < program.GetSize(); ++i) program[i].SetRefModifier(1.0);
     }
 
     /// Spawn core with function that has best match to provided affinity. Do nothing if no
     /// functions match above the provided threshold.
     /// Initialize function state with provided input memory.
     /// Will fail if no inactive cores to claim.
-    void SpawnCore(const affinity_t & affinity, double threshold, const memory_t & input_mem=memory_t(), bool is_main=false) {
+    void SpawnCore(const affinity_t & affinity, double threshold, const memory_t & input_mem=memory_t(), bool is_main=false, bool modify_ref=false) {
       if (!inactive_cores.size()) return; // If there are no unclaimed cores, just return.
       size_t fID;
-      emp::vector<size_t> best_matches(FindBestFuncMatch(affinity, threshold));
+      emp::vector<size_t> best_matches(FindBestFuncMatch(affinity, threshold, modify_ref));
       if (best_matches.empty()) return;
       if (best_matches.size() == 1.0) fID = best_matches[0];
       else if (stochastic_fun_call) fID = best_matches[(size_t)random_ptr->GetUInt(0, best_matches.size())];
@@ -778,7 +787,6 @@ namespace emp {
     const program_t & GetConstProgram() const { return program; }
     program_t & GetProgram() { return program; }
 
-
     /// Get reference to a particular function in hardware's program.
     const Function & GetFunction(size_t fID) const {
       emp_assert(ValidFunction(fID));
@@ -813,6 +821,8 @@ namespace emp {
     /// Is this hardware object configured to allow stochasticity in function calling?
     /// Hardware is only stochastic when calling/event affinity is equidistant from two or more functions.
     bool IsStochasticFunCall() const { return stochastic_fun_call; }
+
+    bool IsFuncRefModificationEnabled() const { return enable_func_ref_modification; }
 
     /// Get the currently executing core ID. If hardware is not in the middle of an execution cycle
     /// (the SingleProcess function), this will return the first core ID in active_cores, which will
@@ -927,6 +937,8 @@ namespace emp {
     /// Configure whether or not function calls should be stochastic if we have two or more matches
     /// that are equidistant from caller/event affinity.
     void SetStochasticFunCall(bool val) { stochastic_fun_call = val; }
+
+    void SetFuncRefModification(bool val) { enable_func_ref_modification = val; }
 
     /// Set trait in traints vector given by id to value given by val.
     /// Will resize traits vector if given id is greater than current traits vector size.
@@ -1089,10 +1101,11 @@ namespace emp {
     }
 
     /// Find best matching functions (by ID) given affinity.
-    emp::vector<size_t> FindBestFuncMatch(const affinity_t & affinity, double threshold) {
+    emp::vector<size_t> FindBestFuncMatch(const affinity_t & affinity, double threshold, bool modify_ref=false) {
       emp::vector<size_t> best_matches;
       for (size_t i=0; i < program.GetSize(); ++i) {
         double bind = SimpleMatchCoeff(program[i].affinity, affinity);
+        if (enable_func_ref_modification && modify_ref) bind *= program[i].GetRefModifier();
         if (bind == threshold) best_matches.push_back(i);
         else if (bind > threshold) {
           best_matches.resize(1);
@@ -1105,11 +1118,11 @@ namespace emp {
 
     /// Call function with best affinity match above threshold.
     /// If not candidate functions found, do nothing.
-    void CallFunction(const affinity_t & affinity, double threshold) {
+    void CallFunction(const affinity_t & affinity, double threshold, bool modify_ref=false) {
       // Are we at max call depth? -- If so, call fails.
       if (GetCurCore().size() >= max_call_depth) return;
       size_t fID;
-      emp::vector<size_t> best_matches(FindBestFuncMatch(affinity, threshold));
+      emp::vector<size_t> best_matches(FindBestFuncMatch(affinity, threshold, modify_ref));
       if (best_matches.empty()) return;
       if (best_matches.size() == 1.0) fID = best_matches[0];
       else if (stochastic_fun_call) fID = best_matches[(size_t)random_ptr->GetUInt(0, best_matches.size())];
@@ -1610,6 +1623,7 @@ namespace emp {
     }
 
     /// Get a pointer to const default instruction library. Will only construct the default instruction library once.
+    /// NOTE: Default instruction library does not support function regulation.
     static Ptr<const InstLib<EventDrivenGP_t>> DefaultInstLib() {
       static inst_lib_t inst_lib;
       if (inst_lib.GetSize() == 0) {
@@ -1657,6 +1671,7 @@ namespace emp {
     /// Get a pointer to const default event library. Will only construct the default event library once.
     /// Note: the default event library does not construct any default dispatch functions. This is
     /// the responsibility of whatever is using the EventDrivenGP hardware.
+    /// NOTE: Default event library does not support function regulation.
     static Ptr<const EventLib<EventDrivenGP_t>> DefaultEventLib() {
       static event_lib_t event_lib;
       if (event_lib.GetSize() == 0) {
