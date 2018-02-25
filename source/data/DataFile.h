@@ -25,7 +25,7 @@
 
 namespace emp {
 
-  /** This class keep track of everything associated with periodically printing data to a file.
+  /** This class keeps track of everything associated with periodically printing data to a file.
    * It maintains a set of functions for calculating the desired measurements at each point in
    * time that they are required. It also handles the formating of the file.
    */
@@ -252,7 +252,7 @@ namespace emp {
         using data_t = typename container_t::value_type;
         for (const data_t & d : df->GetCurrentRows()) {
           df->OutputLine(d);
-        }        
+        }
       }
     };
 
@@ -284,7 +284,7 @@ namespace emp {
   template <typename CONTAINER>
   class CollectionDataFile : public DataFile {
   private:
-    using container_t = typename std::remove_reference<CONTAINER>::type; 
+    using container_t = typename std::remove_reference<CONTAINER>::type;
     using raw_container_t = typename remove_ptr_type<container_t>::type;
     // using non_const_container_t = typename std::remove_const<raw_container_t>::type;
     // using data_t = typename non_const_container_t::value_type;
@@ -292,7 +292,7 @@ namespace emp {
     using coll_fun_t = void(std::ostream &, data_t);
     using fun_update_container_t = std::function<container_t(void)>;
 
-    // std::cout << typeid(container_t).name() << " " << typeid(raw_container_t).name() << " " 
+    // std::cout << typeid(container_t).name() << " " << typeid(raw_container_t).name() << " "
 
     fun_update_container_t update_container_fun;
 
@@ -351,14 +351,14 @@ namespace emp {
           if (i > 0 || keys.size() > 0) *os << line_spacer;
           collection_funs[i](*os, d);
         }
-      *os << line_end;  
+      *os << line_end;
     }
 
     /// Run all of the functions and print the results as a new line in the file
     void Update(){
       emp_assert(update_container_fun);
       current_rows = update_container_fun();
-    // std::cout << "curr: " << to_string(current_rows) << std::endl;  
+    // std::cout << "curr: " << to_string(current_rows) << std::endl;
       // if (emp::is_ptr_type<container_t>::value) {
       //   for (const data_t & d : *current_rows) {
       //     *os << line_begin;
@@ -387,7 +387,7 @@ namespace emp {
       //     }
       //   *os << line_end;
       //   }
-      // }        
+      // }
       // os->flush();
 
       internal::update_impl<container_t>().Update(this);
