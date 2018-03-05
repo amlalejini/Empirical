@@ -26,17 +26,27 @@ int main()
   // Setup the boards.
   std::array<emp::Othello, NUM_BOARDS> games;
   std::array<emp::Othello8, NUM_BOARDS> games8;
+
+  games[0].Print();
+  std::cout << std::endl;
+  games8[0].Print();
+
   for (size_t board_id = 0; board_id < NUM_BOARDS; board_id++) {
     // Make a bunch of moves on each board!
-    size_t num_moves = random.GetUInt(10,50);
+    size_t num_moves = random.GetUInt(10,60);
     for (size_t i = 0; i < num_moves; i++) {
       auto moves = games[board_id].GetMoveOptions();
       if (moves.size() == 0) { board_id--; break; }
       size_t next_move = moves[random.GetUInt(moves.size())];
-      games[board_id].DoNextMove(next_move);
-      games8[board_id].DoNextMove(next_move);
+      bool again = games[board_id].DoNextMove(next_move);
+      bool again8 = games8[board_id].DoNextMove(next_move);
+      if (again != again8) std::cout << "Ack!  Game boards do not agree!" << std::endl;
     }
   }
+
+  games[0].Print();
+  std::cout << std::endl;
+  games8[0].Print();
 
   std::cout << "Finished generating boards!" << std::endl;
 
@@ -100,4 +110,34 @@ int main()
             << ";  time = " << 1000.0 * ((double) base_tot_time) / (double) CLOCKS_PER_SEC
             << " ms." << std::endl;
 
+  // RESTART TIMER!
+  base_start_time = std::clock();
+
+  {
+    emp::Othello8::Player player1 = emp::Othello8::Player::DARK;
+    emp::Othello8::Player player2 = emp::Othello8::Player::LIGHT;
+    count = 0;
+    for (size_t board_id = 0; board_id < NUM_BOARDS; board_id++) {
+      games8[board_id].SetupCache();
+      for (size_t test = 0; test < NUM_LOOPS; test++) {
+        for (size_t i = 0; i < 64; i++) {
+          if (games8[board_id].GetFlipList(player1,i).size() == games8[board_id].GetFlipCount(player1,i)) {
+            count++;
+          } else {
+            std::cout << "Oh oh... didn't match!" << std::endl;
+          }
+          if (games8[board_id].GetFlipList(player2,i).size() == games8[board_id].GetFlipCount(player2,i)) {
+            count++;
+          } else {
+            std::cout << "Oh oh... didn't match!" << std::endl;
+          }
+        }
+      }
+    }
+  }
+
+  base_tot_time = std::clock() - base_start_time;
+  std::cout << "Othello8 count (with Caching) = " << count
+            << ";  time = " << 1000.0 * ((double) base_tot_time) / (double) CLOCKS_PER_SEC
+            << " ms." << std::endl;
 }
