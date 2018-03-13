@@ -191,9 +191,10 @@ TEST_CASE("World systematics integration", "[evo]") {
 
   emp::World<emp::vector<int>, emp::mut_landscape_info<int>> world;
   world.SetMutFun([](emp::vector<int> & org, emp::Random & r){return 0;});
+  world.SetFitFun([](emp::vector<int> & org){return Sum(org);});
 
   // world.GetSystematics().OnNew(setup_phenotype);
-  world.Inject(emp::vector<int>({1,2,3}));
+  world.InjectAt(emp::vector<int>({1,2,3}), 0);
 
   world.GetGenotypeAt(0)->GetData().RecordPhenotype(6);
   world.GetGenotypeAt(0)->GetData().RecordFitness(2);
@@ -211,6 +212,22 @@ TEST_CASE("World systematics integration", "[evo]") {
   REQUIRE(old_taxon->GetNumOff() == 1);
   REQUIRE(world.GetGenotypeAt(0)->GetParent()->GetData().phenotype == 6);
   REQUIRE((*world.GetSystematics().GetActive().begin())->GetNumOrgs() == 1);
+
+  world.SetMutFun([](emp::vector<int> & org, emp::Random & r){
+    for (size_t i = 0; i < org.size(); i++) {
+      if (r.P(.05)) {
+        org[i] += r.GetUInt(5);
+      }
+    }
+    return 0;
+  });
+
+  for (int i = 0; i < 10; i++) {
+    TournamentSelect(world, 2, 5);
+    world.Update();
+  }
+  world.GetSystematics().PrintStatus();
+  world.GetSystematics().PrintPhylogeny();
 }
 
 template <typename WORLD_TYPE>
@@ -242,7 +259,7 @@ emp::DataFile AddDominantFile(WORLD_TYPE & world){
 }
 
 TEST_CASE("Run world", "[evo]") {
-  using mut_count_t = std::unordered_map<std::string, int>;
+  using mut_count_t = std::unordered_map<std::string, double>;
   using data_t = emp::mut_landscape_info<emp::vector<double>>;
   using org_t = emp::AvidaGP;
 

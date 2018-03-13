@@ -127,7 +127,8 @@ namespace emp {
   void LexicaseSelect(WORLD_TYPE & world,
                       const emp::vector< typename WORLD_TYPE::fun_calc_fitness_t > & fit_funs,
                       size_t repro_count=1,
-                      size_t max_funs=0)
+                      size_t max_funs=0,
+                      double epsilon=0)
   {
     emp_assert(world.GetSize() > 0);
     emp_assert(fit_funs.size() > 0);
@@ -214,6 +215,18 @@ namespace emp {
           else if (cur_fit == max_fit) {
             next_gens.push_back(gen_id);   // Same as cur max fitness -- save this org too.
             // std::cout << "Adding: " << gen_id << std::endl;
+          }
+        }
+
+        if (epsilon > 0) {
+          for (size_t gen_id : cur_gens) {
+            const double cur_fit = fitnesses[fit_id][gen_id];
+            emp_assert(cur_fit < max_fit || Has(next_gens, gen_id));
+
+            // We want to only add things that aren't already added
+            if (cur_fit < max_fit && cur_fit >= max_fit - epsilon) {
+              next_gens.push_back(gen_id);
+            }
           }
         }
         // Make next_orgs into new cur_orgs; make cur_orgs allocated space for next_orgs.

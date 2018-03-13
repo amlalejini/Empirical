@@ -50,7 +50,7 @@ namespace emp {
     /// the number of that type of mutation that occured to bring about this taxon.
     using phen_t = PHEN_TYPE;
 
-    std::unordered_map<std::string, int> mut_counts;
+    std::unordered_map<std::string, double> mut_counts;
     DataNode<double, data::Current, data::Range> fitness; /// This taxon's fitness (for assessing deleterious mutational steps)
     PHEN_TYPE phenotype; /// This taxon's phenotype (for assessing phenotypic change)
 
@@ -58,7 +58,7 @@ namespace emp {
       return phenotype;
     }
 
-    void RecordMutation(const std::unordered_map<std::string, int> & muts) {
+    void RecordMutation(const std::unordered_map<std::string, double> & muts) {
       for (auto mut : muts) {
         if (Has(mut_counts, mut.first)) {
           mut_counts[mut.first] += mut.second;
@@ -278,7 +278,7 @@ namespace emp {
     EMP_CREATE_OPTIONAL_METHOD(RecordPhenotype, RecordPhenotype);
 
     /// Currently records mutation information if appropriate for DATA_TYPE
-    void RecordMutationData(Ptr<taxon_t> org, std::unordered_map<std::string, int> mut_counts) {
+    void RecordMutationData(Ptr<taxon_t> org, std::unordered_map<std::string, double> mut_counts) {
       RecordMutation(org->GetData(), mut_counts);
     }
 
@@ -618,7 +618,6 @@ namespace emp {
     }
 
 
-
     /// Request a pointer to the Most-Recent Common Ancestor for the population.
     Ptr<taxon_t> GetMRCA() const;
 
@@ -642,6 +641,9 @@ namespace emp {
 
     /// Print whole lineage.
     void PrintLineage(Ptr<taxon_t> taxon, std::ostream & os=std::cout) const;
+
+    /// Print whole phylogeny
+    void PrintPhylogeny(std::ostream & os = std::cout) const;
 
     /// Calculate the genetic diversity of the population.
     double CalcDiversity();
@@ -836,6 +838,82 @@ namespace emp {
       taxon = taxon->GetParent();
     }
   }
+
+  template <typename ORG_INFO, typename DATA_STRUCT>
+  auto PrintGenotype(std::ostream & os, Ptr<Taxon<ORG_INFO, DATA_STRUCT>> & tax) -> emp::sfinae_decoy<void, decltype(emp::to_string(tax->GetInfo()))> {
+    os << emp::to_string(tax->GetInfo()) << ", ";
+  }
+
+  template <typename T>
+  void PrintGenotype(std::ostream & os, T tax) {}
+
+  template <typename ORG_INFO>
+  auto PrintGenotypeHeader(std::ostream & os) -> emp::sfinae_decoy<void, decltype(emp::to_string(std::declval<ORG_INFO>()))> {
+    os << "info, ";
+  }
+
+
+  void PrintGenotypeHeader(std::ostream & os) {;}
+
+
+  // Print whole phylogeny
+  template <typename ORG_INFO, typename DATA_STRUCT>
+  void Systematics<ORG_INFO, DATA_STRUCT>::PrintPhylogeny(std::ostream & os) const {
+
+    Ptr<taxon_t> parent;
+    size_t parent_id;
+
+    os << "id, parent_id, ";
+    PrintGenotypeHeader<ORG_INFO>(os);
+    os << "num_orgs, orig_time" << std::endl;
+
+    for (auto tax : active_taxa) {
+      parent = tax->GetParent();
+      if (parent) {
+        parent_id = parent->GetID();
+      } else {
+        parent_id = -1;
+      }
+
+      os << tax->GetID() << ", "
+         << parent_id << ", ";
+      PrintGenotype(os, tax);
+      os << tax->GetNumOrgs() << ", "
+         << tax->GetOriginationTime() << std::endl;
+    }
+
+    for (auto tax : ancestor_taxa) {
+      parent = tax->GetParent();
+      if (parent) {
+        parent_id = parent->GetID();
+      } else {
+        parent_id = -1;
+      }
+
+      os << tax->GetID() << ", "
+         << parent_id << ", ";
+         PrintGenotype(os, tax);
+      os << tax->GetNumOrgs() << ", "
+         << tax->GetOriginationTime() << std::endl;
+    }
+
+    for (auto tax : outside_taxa) {
+      parent = tax->GetParent();
+      if (parent) {
+        parent_id = parent->GetID();
+      } else {
+        parent_id = -1;
+      }
+
+      os << tax->GetID() << ", "
+         << parent_id << ", ";
+        PrintGenotype(os, tax);
+      os << tax->GetNumOrgs() << ", "
+         << tax->GetOriginationTime() << std::endl;
+    }
+
+  }
+
 
   // Calculate the genetic diversity of the population.
   template <typename ORG_INFO, typename DATA_STRUCT>
