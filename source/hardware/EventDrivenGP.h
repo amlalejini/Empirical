@@ -631,6 +631,10 @@ namespace emp {
     size_t exec_core_id;                  //< core ID of the currently executing core.
     bool is_executing;                    //< True when mid-execution of all cores. (On every CPU cycle: execute all cores).
 
+    // Signals
+    emp::Signal<void(EventDrivenGP_AW<AFFINITY_WIDTH> &, size_t)> before_func_call_sig;
+    emp::Signal<void(EventDrivenGP_AW<AFFINITY_WIDTH> &, size_t)> before_core_spawn_sig;
+
     // TODO: disallow configuration of hardware while executing. (and any other functions that could sent things into a bad state)
 
   public:
@@ -759,6 +763,7 @@ namespace emp {
     /// Will fail if no inactive cores to claim.
     void SpawnCore(size_t fID, const memory_t & input_mem=memory_t(), bool is_main=false) {
       if (!inactive_cores.size()) return; // If there are no unclaimed cores, just return.
+      before_core_spawn_sig.Trigger(*this, fID);
       // Which core should we spin up?
       size_t core_id = inactive_cores.back();
       inactive_cores.pop_back(); // Claim that core!
@@ -861,6 +866,9 @@ namespace emp {
     }
 
     // ------- Configuration -------
+    SignalKey OnBeforeFuncCall(const std::function<void(EventDrivenGP_AW<AFFINITY_WIDTH> &, size_t)> & fun) { return before_func_call_sig.AddAction(fun); }
+    SignalKey OnBeforeCoreSpawn(const std::function<void(EventDrivenGP_AW<AFFINITY_WIDTH> &, size_t)> & fun) { return before_core_spawn_sig.AddAction(fun); }
+
     /// Set minimum binding threshold.
     /// Requirement: minimum binding threshold >= 0.0
     void SetMinBindThresh(double val) {
@@ -1142,6 +1150,7 @@ namespace emp {
       exec_stk_t & core = GetCurCore();
       // Are we at max call depth? -- If so, call fails.
       if (core.size() >= max_call_depth) return;
+      before_func_call_sig.Trigger(*this, fID);
       // Push new state onto stack.
       core.emplace_back();
       State & new_state = core.back();
