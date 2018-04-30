@@ -616,6 +616,8 @@ namespace emp {
     /// Event handler function type alias.
     using fun_event_handler_t = std::function<void(EventDrivenGP_t &, const event_t &)>;
 
+    using fun_apply_func_ref_mod_t = std::function<double(double, const Function &)>;
+
   protected:
     Ptr<const event_lib_t> event_lib;     ///< Pointer to const event library associated with this hardware.
     Ptr<Random> random_ptr;               ///< Pointer to random object to use.
@@ -636,9 +638,12 @@ namespace emp {
     std::deque<size_t> pending_cores;     ///< Queue of core IDs pending activation.
     size_t exec_core_id;                  ///< core ID of the currently executing core.
     bool is_executing;                    ///< True when mid-execution of all cores. (On every CPU cycle: execute all cores).
-    bool enable_func_ref_modification;    ///< Allow function referencing (binding) to be modified?
+    bool enable_func_ref_mod;    ///< Allow function referencing (binding) to be modified?
 
     // TODO: disallow configuration of hardware while executing. (and any other functions that could sent things into a bad state)
+
+  // Re-configurable functions!
+  fun_apply_func_ref_mod_t apply_func_ref_mod;
 
   public:
     /// EventDrivenGP constructor. Give instance variables reasonable defaults. Allow for configuration
@@ -654,7 +659,7 @@ namespace emp {
         default_mem_value(DEFAULT_MEM_VALUE), min_bind_thresh(DEFAULT_MIN_BIND_THRESH),
         stochastic_fun_call(true),
         cores(max_cores), active_cores(), inactive_cores(max_cores), pending_cores(),
-        exec_core_id(0), is_executing(false), enable_func_ref_modification(false)
+        exec_core_id(0), is_executing(false), enable_func_ref_mod(false)
     {
       // If no random provided, create one.
       if (!rnd) NewRandom();
@@ -836,7 +841,7 @@ namespace emp {
     /// Hardware is only stochastic when calling/event affinity is equidistant from two or more functions.
     bool IsStochasticFunCall() const { return stochastic_fun_call; }
 
-    bool IsFuncRefModificationEnabled() const { return enable_func_ref_modification; }
+    bool IsFuncRefModEnabled() const { return enable_func_ref_mod; }
     
     /// Get all hardware cores.
     /// NOTE: use responsibly! 
@@ -956,7 +961,10 @@ namespace emp {
     /// that are equidistant from caller/event affinity.
     void SetStochasticFunCall(bool val) { stochastic_fun_call = val; }
 
-    void SetFuncRefModification(bool val) { enable_func_ref_modification = val; }
+    void SetFuncRefModifier(const fun_apply_func_ref_mod_t & fun) {
+      apply_func_ref_mod = fun; 
+      enable_func_ref_mod = true;
+    }
 
     /// Set trait in traints vector given by id to value given by val.
     /// Will resize traits vector if given id is greater than current traits vector size.
@@ -1123,7 +1131,7 @@ namespace emp {
       emp::vector<size_t> best_matches;
       for (size_t i=0; i < program.GetSize(); ++i) {
         double bind = SimpleMatchCoeff(program[i].affinity, affinity);
-        if (enable_func_ref_modification && modify_ref) bind *= program[i].GetRefModifier();
+        if (enable_func_ref_mod && modify_ref) bind = apply_func_ref_mod(bind, program[i]);
         if (bind == threshold) best_matches.push_back(i);
         else if (bind > threshold) {
           best_matches.resize(1);
