@@ -836,13 +836,11 @@ namespace emp {
     /// Hardware is only stochastic when calling/event affinity is equidistant from two or more functions.
     bool IsStochasticFunCall() const { return stochastic_fun_call; }
 
-<<<<<<< HEAD
     bool IsFuncRefModificationEnabled() const { return enable_func_ref_modification; }
-=======
+    
     /// Get all hardware cores.
     /// NOTE: use responsibly! 
     emp::vector<exec_stk_t> & GetCores() { return cores; }
->>>>>>> master
 
     /// Get the currently executing core ID. If hardware is not in the middle of an execution cycle
     /// (the SingleProcess function), this will return the first core ID in active_cores, which will
