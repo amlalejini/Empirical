@@ -1,7 +1,7 @@
 /**
  *  @note This file is part of Empirical, https://github.com/devosoft/Empirical
  *  @copyright Copyright (C) Michigan State University, MIT Software license; see doc/LICENSE.md
- *  @date 2016-2017
+ *  @date 2016-2018
  *
  *  @file  math.h
  *  @brief Useful mathematical functions (that are constexpr when possible.)
@@ -17,6 +17,7 @@
 #include <cmath>
 
 #include "../base/assert.h"
+#include "../meta/reflection.h"
 #include "const.h"
 
 namespace emp {
@@ -90,7 +91,7 @@ namespace emp {
   }
 
 
-  namespace {
+  namespace internal {
     // A compile-time log calculator for values [1,2)
     static constexpr double Log2_base(double x) {
       emp_assert(x > 0);
@@ -117,7 +118,7 @@ namespace emp {
   /// Compile-time log base 2 calculator.
   static constexpr double Log2(double x) {
     emp_assert(x > 0);
-    return (x < 1.0) ? Log2_frac(x) : Log2_pos(x);
+    return (x < 1.0) ? internal::Log2_frac(x) : internal::Log2_pos(x);
   }
 
   /// Compile-time log calculator
@@ -127,7 +128,12 @@ namespace emp {
   /// Compile-time log base 10 calculator.
   static constexpr double Log10(double x) { return Log(x, 10.0); }
 
-  namespace {
+  /// A simple function to square a value.
+  template <typename T>
+  static constexpr T Square(T val) { return val * val; }
+
+  // Pow helper functions.
+  namespace internal {
     static constexpr double Pow2_lt1(double exp, int id=0) {
       return (id==32) ? 1.0 :
         ( (exp > 0.5) ? (pow2_chart_bits[id]*Pow2_lt1(exp*2.0-1.0,id+1)) : Pow2_lt1(exp*2.0,id+1) );
@@ -138,14 +144,17 @@ namespace emp {
     }
   }
 
-  /// A fast (O(log p)) integer-power command.
-  static constexpr int Pow(int base, int p) {
-    return (p <= 0) ? 1 : base * Pow(base, p-1);
+  /// A fast (O(log p)) integral-power command.
+  template <typename T>
+  static constexpr type_if<T, std::is_integral> Pow(T base, T p) {
+    if (p <= 0) return 1;
+    if (p & 1) return base * Pow(base, p-1); // Odd exponent: strip one mulitple off and recurse.
+    return Square( Pow(base,p/2) );          // Even exponent: calc for half and square result.
   }
 
   /// A fast 2^x command.
   static constexpr double Pow2(double exp) {
-    return (exp < 0.0) ? (1.0/Pow2_impl(-exp)) : Pow2_impl(exp);
+    return (exp < 0.0) ? (1.0/internal::Pow2_impl(-exp)) : internal::Pow2_impl(exp);
   }
 
   /// A fast method for calculating exponents for int types.

@@ -2,6 +2,7 @@
 #define EMP_EVENT_DRIVEN_GP_H
 
 #include <functional>
+#include <tuple>
 #include <unordered_map>
 #include <deque>
 #include <utility>
@@ -289,6 +290,11 @@ namespace emp {
         return id == in.id && args == in.args && affinity == in.affinity;
       }
       bool operator!=(const Instruction & in) const { return !(*this == in); }
+
+      bool operator<(const Instruction & other) const {
+          return std::tie(id, args, affinity) < std::tie(other.id, other.args, other.affinity);
+      }
+
     };
 
     using inst_t = Instruction;                    //< Convenient Instruction type alias.
@@ -316,6 +322,10 @@ namespace emp {
         return inst_seq == in.inst_seq && affinity == in.affinity;
       }
       bool operator!=(const Function & in) const { return !(*this == in); }
+
+      bool operator<(const Function & other) const {
+          return std::tie(inst_seq, affinity) < std::tie(other.inst_seq, other.affinity);
+      }
 
       size_t GetSize() const { return inst_seq.size(); }
 
@@ -365,6 +375,10 @@ namespace emp {
 
       bool operator==(const Program & in) const { return program == in.program; }
       bool operator!=(const Program & in) const { return !(*this == in); }
+
+      bool operator<(const Program & other) const {
+          return program < other.program;
+      }
 
       /// Get number of functions that make up this program.
       size_t GetSize() const { return program.size(); }
@@ -822,7 +836,13 @@ namespace emp {
     /// Hardware is only stochastic when calling/event affinity is equidistant from two or more functions.
     bool IsStochasticFunCall() const { return stochastic_fun_call; }
 
+<<<<<<< HEAD
     bool IsFuncRefModificationEnabled() const { return enable_func_ref_modification; }
+=======
+    /// Get all hardware cores.
+    /// NOTE: use responsibly! 
+    emp::vector<exec_stk_t> & GetCores() { return cores; }
+>>>>>>> master
 
     /// Get the currently executing core ID. If hardware is not in the middle of an execution cycle
     /// (the SingleProcess function), this will return the first core ID in active_cores, which will
