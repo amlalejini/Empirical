@@ -639,7 +639,7 @@ namespace emp {
     size_t exec_core_id;                  ///< core ID of the currently executing core.
     bool is_executing;                    ///< True when mid-execution of all cores. (On every CPU cycle: execute all cores).
     bool enable_func_ref_mod;    ///< Allow function referencing (binding) to be modified?
-
+    double base_func_ref_mod;
     // TODO: disallow configuration of hardware while executing. (and any other functions that could sent things into a bad state)
 
   // Re-configurable functions!
@@ -659,7 +659,7 @@ namespace emp {
         default_mem_value(DEFAULT_MEM_VALUE), min_bind_thresh(DEFAULT_MIN_BIND_THRESH),
         stochastic_fun_call(true),
         cores(max_cores), active_cores(), inactive_cores(max_cores), pending_cores(),
-        exec_core_id(0), is_executing(false), enable_func_ref_mod(false)
+        exec_core_id(0), is_executing(false), enable_func_ref_mod(false), base_func_ref_mod(1.0)
     {
       // If no random provided, create one.
       if (!rnd) NewRandom();
@@ -692,7 +692,8 @@ namespace emp {
         cores(in.cores),
         active_cores(in.active_cores), inactive_cores(in.inactive_cores),
         pending_cores(in.pending_cores),
-        exec_core_id(in.exec_core_id), is_executing(in.is_executing)
+        exec_core_id(in.exec_core_id), is_executing(in.is_executing), 
+        enable_func_ref_mod(in.enable_func_ref_mod), base_func_ref_mod(in.base_func_ref_mod)
     {
       in.random_ptr = nullptr;
       in.random_owner = false;
@@ -713,7 +714,8 @@ namespace emp {
         cores(in.cores),
         active_cores(in.active_cores), inactive_cores(in.inactive_cores),
         pending_cores(in.pending_cores),
-        exec_core_id(in.exec_core_id), is_executing(in.is_executing)
+        exec_core_id(in.exec_core_id), is_executing(in.is_executing), 
+        enable_func_ref_mod(in.enable_func_ref_mod), base_func_ref_mod(in.base_func_ref_mod)
     {
       if (in.random_owner) NewRandom();
       else random_ptr = in.random_ptr;
@@ -750,7 +752,7 @@ namespace emp {
       errors = 0;
       is_executing = false;
       // Reset function reference modifiers to 1.0
-      for (size_t i = 0; i < program.GetSize(); ++i) program[i].SetRefModifier(1.0);
+      for (size_t i = 0; i < program.GetSize(); ++i) program[i].SetRefModifier(base_func_ref_mod);
     }
 
     /// Spawn core with function that has best match to provided affinity. Do nothing if no
@@ -883,6 +885,10 @@ namespace emp {
       min_bind_thresh = emp::Max(val, 0.0);
     }
 
+    void SetBaseFuncRefMod(double val) {
+      base_func_ref_mod = val;
+    }
+    
     /// Set the maximum number of cores that are allowed to be running/active simultaneously on
     /// this hardware object.
     /// Warning: If you decrease max cores, you may kill actively running cores.
