@@ -737,9 +737,9 @@ namespace emp {
 
     /// Reset only hardware, not program.
     /// Not allowed to reset hardware during execution.
-    void ResetHardware() {
+    void ResetHardware(bool clear_shared_mem=true, bool clear_func_ref_mods=true) {
       emp_assert(!is_executing);
-      shared_mem.clear();
+      if (clear_shared_mem) shared_mem.clear();
       event_queue.clear();
       for (size_t i = 0; i < cores.size(); ++i) cores[i].clear();
       active_cores.clear();
@@ -752,7 +752,9 @@ namespace emp {
       errors = 0;
       is_executing = false;
       // Reset function reference modifiers to 1.0
-      for (size_t i = 0; i < program.GetSize(); ++i) program[i].SetRefModifier(base_func_ref_mod);
+      if (clear_func_ref_mods) {
+        for (size_t i = 0; i < program.GetSize(); ++i) program[i].SetRefModifier(base_func_ref_mod);
+      }
     }
 
     /// Spawn core with function that has best match to provided affinity. Do nothing if no
