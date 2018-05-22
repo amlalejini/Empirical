@@ -17,14 +17,14 @@
 int main(int argc, char* argv[])
 {
   constexpr size_t MAX_GENS = 100;
-  constexpr size_t POP_SIZE = 100;
+  constexpr size_t POP_SIZE = 1600;
 
   emp::vector<std::string> args = emp::cl::args_to_strings(argc, argv);
 
   std::cout << "Hello World!" << std::endl;
 
-  emp::Random random;
-  ArmWorld world(random);
+  ArmWorld world;
+  world.ResetDiverse();
 
   // Setup the print function to indicate if a function exists.
   std::function<void(ArmOrg&,std::ostream &)> print_fun = [](ArmOrg & val, std::ostream & os) {

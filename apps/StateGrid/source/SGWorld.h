@@ -20,7 +20,7 @@ public:
 
   inst_lib_t inst_lib;
   SGPatches state_grid;
-  emp::vector< std::function<double(const SGOrg &)> > hint_funs;
+  emp::vector< std::function<double(SGOrg &)> > hint_funs;
 
   size_t POP_SIZE;         ///< Total population size.
   size_t GENOME_SIZE;      ///< How long of a genome should we be using?
@@ -118,13 +118,13 @@ public:
       size_t target_x = h % state_grid.GetWidth();
       size_t target_y = h / state_grid.GetWidth();
 
-      hint_funs.push_back( [target_x,target_y,target_state](const SGOrg & org) {
+      hint_funs.push_back( [target_x,target_y,target_state](SGOrg & org) {
         return org.GetSGStatus().WasAt(target_x, target_y) ? target_state : 0.0;
       });
     }
 
     // Setup a well-mixed population structure
-    SetWellMixed(true);
+    SetPopStruct_Mixed(true);
 
     // Build a random initial popoulation.
     for (size_t i = 0; i < POP_SIZE; i++) {
