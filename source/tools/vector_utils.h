@@ -11,6 +11,9 @@
 #ifndef EMP_VECTOR_UTILS_H
 #define EMP_VECTOR_UTILS_H
 
+#include <algorithm>
+#include <functional>
+
 #include "../base/vector.h"
 
 namespace emp {
@@ -24,10 +27,10 @@ namespace emp {
     return -1;
   }
 
-  /// Return whether a value exists in a vector.
+  /// Return whether a value exists in a vector.s
   template <typename T>
   bool Has(const emp::vector<T> vec, const T & val) {
-    return FindPos(vec, val) >= 0;
+    return FindValue(vec, val) >= 0;
   }
 
   /// Print the contects of a vector.
