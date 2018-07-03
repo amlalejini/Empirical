@@ -20,10 +20,9 @@ CFLAGS_web_debug := $(CFLAGS_all) $(OFLAGS_web_debug) --js-library ../../source/
 CFLAGS_web_opt := $(CFLAGS_all) $(OFLAGS_web_opt) --js-library ../../source/web/library_emp.js -s EXPORTED_FUNCTIONS="['_main', '_empCppCallback']" -s NO_EXIT_RUNTIME=1
 #CFLAGS_web := $(CFLAGS_all) $(OFLAGS_web) --js-library ../../source/web/library_emp.js -s EXPORTED_FUNCTIONS="['_main', '_empCppCallback']" -s DISABLE_EXCEPTION_CATCHING=1 -s NO_EXIT_RUNTIME=1
 
-TARGETS := attrs Binomial BitSet BitVector Cache combos const DFA File flex_function GenericFunction IndexMap info_theory Lexer lexer_utils math memo_function NFA Parser ra_set Random Range RegEx tuple_utils TypeTracker valsort_map vector_utils
+TARGETS := Surface
 
-TOOLS := ../../source/tools
-TOOL_DEPEND := ../../source/base/assert.h
+GEOMETRY := ../../source/geometry
 
 default: native
 
@@ -45,22 +44,13 @@ native: all
 
 all: $(TARGETS)
 
-$(TARGETS): % : %.cc $(TOOL_DEPEND) $(TOOLS)/%.h
+$(TARGETS): % : %.cc $(GEOMETRY)/%.h
 	$(CXX) $(CFLAGS_version) $(CFLAGS) $< -o $@
 
-# Lexer: Lexer.cc $(TOOLS)/Lexer.h $(TOOL_DEPEND) $(TOOLS)/DFA.h $(TOOLS)/NFA.h
-#	$(CXX) $(CFLAGS) Lexer.cc -o Lexer
-
-# lexer_utils: lexer_utils.cc $(TOOLS)/lexer_utils.h $(TOOL_DEPEND) $(TOOLS)/DFA.h $(TOOLS)/NFA.h
-# 	$(CXX) $(CFLAGS) lexer_utils.cc -o lexer_utils
-
-# Parser: Parser.cc $(TOOLS)/Parser.h $(TOOL_DEPEND) $(TOOLS)/DFA.h $(TOOLS)/NFA.h
-# 	$(CXX) $(CFLAGS) Parser.cc -o Parser
-
-opt-%: %.cc $(TOOL_DEPEND) $(TOOLS)/%.h
+opt-%: %.cc $(GEOMETRY)/%.h
 	$(CXX) $(CFLAGS_version) $(CFLAGS_native_opt) $< -o $@
 
-debug-%: %.cc $(TOOL_DEPEND) $(TOOLS)/%.h
+debug-%: %.cc $(GEOMETRY)/%.h
 	$(CXX) $(CFLAGS_version) $(CFLAGS_native_debug) $< -o $@
 
 clean:
