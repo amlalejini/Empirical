@@ -183,7 +183,7 @@ namespace emp {
 
     // @CAO: Can probably optimize a bit!
 
-    std::map<typename ORG::genome_t, int> genotype_counts;
+    std::map<typename ORG::genome_t, size_t> genotype_counts;
     emp::vector<emp::vector<size_t>> genotype_lists;
 
     // Find all orgs with same genotype - we can dramatically reduce
@@ -213,7 +213,7 @@ namespace emp {
     for (size_t fit_id = 0; fit_id < fit_funs.size(); ++fit_id) {
       fitnesses[fit_id].resize(genotype_counts.size());
       // std::cout << fit_id << std::endl;
-      int id = 0;
+      size_t id = 0;
       for (auto & gen : genotype_lists) {
         fitnesses[fit_id][id] = fit_funs[fit_id](world.GetOrg(gen[0]));
         id++;
@@ -290,12 +290,12 @@ namespace emp {
       }
       emp_assert(repro_id != -1, repro_id, winner, options);
 
-      // std::cout << depth << "abotu to calc used" <<std::endl;
-      emp::vector<size_t> used = Slice(order, 0, depth+1);
+      // std::cout << depth << "about to calc used" <<std::endl;
+      emp::vector<size_t> used = Slice(order, 0, (size_t)depth+1);
       // If the world has a OnLexicaseSelect method, call it
       // std::cout << depth << " " << to_string(used) << std::endl;
       TriggerOnLexicaseSelect(world, used, repro_id);
-      world.DoBirth( world.GetGenomeAt(repro_id), repro_id );
+      world.DoBirth( world.GetGenomeAt((size_t)repro_id), (size_t)repro_id );
     }
     // std::cout << "Done with lex" << std::endl;
   }

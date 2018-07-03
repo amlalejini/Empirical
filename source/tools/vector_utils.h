@@ -101,13 +101,13 @@ namespace emp {
   /// Returns a vector containing a chunk of elements from @param vec
   /// starting at @param start and going up to but not including @param stop.
   template <typename T>
-  emp::vector<T> Slice(emp::vector<T> vec, int start, int stop) {
+  emp::vector<T> Slice(emp::vector<T> vec, size_t start, size_t stop) {
     emp_assert(start < stop, start, stop);
-    emp_assert(start < (int)vec.size(), start, vec.size());
-    emp_assert(stop <= (int)vec.size(), stop, vec.size());
+    emp_assert(start < vec.size(), start, vec.size());
+    emp_assert(stop <= vec.size(), stop, vec.size());
 
     emp::vector<T> new_vec;
-    for (int i = start; i < stop; i++){
+    for (size_t i = start; i < stop; i++){
       new_vec.push_back(vec[i]);
     }
     return new_vec;
