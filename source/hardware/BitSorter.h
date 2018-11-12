@@ -35,6 +35,15 @@ namespace emp {
     /// How many comparators are in this sorting network.
     size_t GetSize() const { return compare_set.size(); }
 
+    /// Get comparator at a given position.
+    std::pair<size_t, size_t> GetComparator(size_t pos) {
+      emp_assert(pos < GetSize());
+      bits_t c = compare_set[pos];
+      const size_t pos1 = pop_bit(c);
+      const size_t pos2 = find_bit(c);
+      return {pos1, pos2};
+    } 
+
     /// If this network is compressed as far as possible, what will the max depth of each position be?
     void CalcDepth(size_t num_bits, emp::vector<size_t> & depth_vals) const {
       depth_vals.resize(0);
@@ -127,6 +136,17 @@ namespace emp {
         if ( (svals & (svals+1)) == 0) count++;  // Sorted!  (a sorted network should have all one bits to the right)
       }
       return count;
+    }
+
+    /// Check if this bitsorter is a correct bitsorter (capable of sorting all
+    /// possible bit strings of given size).
+    bool IsCorrect(size_t num_bits = 16) const {
+      const bits_t limit = 1 << num_bits;
+      for (bits_t vals = 0; vals < limit; vals++) {
+        bits_t svals = Sort(vals);
+        if ( (svals & (svals+1)) != 0) return false;  // Sorted!  (a sorted network should have all one bits to the right)
+      }
+      return true;
     }
 
     /// Convert a specified set of values to an std::string of 0's and 1's.
