@@ -15,6 +15,7 @@
 #include "../base/vector.h"
 #include "../tools/bitset_utils.h"
 #include "../tools/vector_utils.h"
+#include "../tools/BitVector.h"
 
 namespace emp {
 
@@ -35,6 +36,9 @@ namespace emp {
     /// How many comparators are in this sorting network.
     size_t GetSize() const { return compare_set.size(); }
 
+    /// Get full compare set. Use at your own risk.
+    emp::vector<bits_t> & GetCompareSet() { return compare_set; }
+
     /// Get comparator at a given position.
     std::pair<size_t, size_t> GetComparator(size_t pos) {
       emp_assert(pos < GetSize());
@@ -43,6 +47,9 @@ namespace emp {
       const size_t pos2 = find_bit(c);
       return {pos1, pos2};
     } 
+
+    /// Clear the bitsorter.
+    void Clear() { compare_set.clear(); }
 
     /// If this network is compressed as far as possible, what will the max depth of each position be?
     void CalcDepth(size_t num_bits, emp::vector<size_t> & depth_vals) const {
@@ -157,6 +164,15 @@ namespace emp {
         else out_str += "0";
       }
       return out_str;
+    }
+
+    static emp::BitVector ToBitVector(bits_t values, size_t num_bits=16) {
+      emp::BitVector bit_vec(16, false);
+      for (size_t id = num_bits; id > 0; id--) {
+        if (values & 1 << (id-1)) bit_vec.Set(id-1, true);
+        else bit_vec.Set(id-1, false);;
+      }
+      return bit_vec;
     }
 
     /// Describe this sorting network in a string, listing all comparators in order.
