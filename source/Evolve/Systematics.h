@@ -719,6 +719,16 @@ namespace emp {
       return next_taxon_locations[id];
     }
 
+    /// Get number of branching and leaf nodes in the phylogeny below (and including)
+    /// the most recent common ancestor.
+    size_t GetNumSparseTaxa() const {
+      size_t cnt = 0;
+      for (auto tax : ancestor_taxa) {
+        if (tax->GetNumOff() > 1) ++cnt;
+      }
+      return cnt + active_taxa.size();
+    }
+
     /** From (Faith 1992, reviewed in Winters et al., 2013), phylogenetic diversity is
      *  the sum of edges in the minimal spanning tree connected the taxa you're
      *  calculating diversity of.
