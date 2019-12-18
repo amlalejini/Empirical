@@ -196,7 +196,6 @@ namespace emp {
     /// Calling with n = 0 means delegate choice for how many values to return
     /// to the Selector.
     emp::vector<uid_t> Match(const query_t & query, size_t n=0) override {
-
       // try looking up in cache
       if constexpr (cache_available) {
         if (
@@ -218,6 +217,9 @@ namespace emp {
 
       // apply regulation to generate match scores
       std::unordered_map<uid_t, double> scores;
+      //  Len(uids) == Len(regulators) == len(tags)
+      emp_assert(state.uids.size() == state.regulators.size(), "Size mismatch!", state.uids.size(), state.regulators.size());
+      emp_assert(state.uids.size() == state.tags.size(), "Size mismatch!", state.uids.size(), state.tags.size());
       for (const auto & uid : state.uids) {
         scores[uid] = state.regulators.at(uid)(
           matches.at( state.tags.at(uid) )
