@@ -218,13 +218,13 @@ namespace emp {
         }
         emp_assert(emp::Has(matches, tag));
       }
-
+      // somehow matches gets fucked?
       emp_assert(state.uids.size() == state.tags.size(), "Size mismatch!", state.uids.size(), state.tags.size());
       for (const auto &[uid, tag] : state.tags) {
-        emp_assert(emp::Has(matches, tag));       // Matches has tag associated with this UID
         emp_assert(emp::Has(state.uids, uid));    // state.uids has uid associated with this tag
         emp_assert(emp::Has(state.tags, uid));    // state.tags has uid
         emp_assert(tag == state.tags.at(uid), tag, state.tags.at(uid));
+        emp_assert(emp::Has(matches, tag), matches.size());       // Matches has tag associated with this UID
       }
 
       // verify that matches makes sense
