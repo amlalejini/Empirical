@@ -567,11 +567,19 @@ namespace emp {
     }
 
     /// Get the full byte starting from the bit at a specified index.
+    // uint8_t GetByte(size_t index) const {
+    //   emp_assert(index < NUM_BYTES);
+    //   const size_t field_id = Byte2Field(index);
+    //   const size_t pos_id = Byte2FieldPos(index);
+    //   return (bit_set[field_id] >> pos_id) & 255;
+    // }
+
     uint8_t GetByte(size_t index) const {
       emp_assert(index < NUM_BYTES);
-      const size_t field_id = Byte2Field(index);
-      const size_t pos_id = Byte2FieldPos(index);
-      return (bit_set[field_id] >> pos_id) & 255;
+      return reinterpret_cast<unsigned char *>(bit_set)[index];
+      // const size_t field_id = Byte2Field(index);
+      // const size_t pos_id = Byte2FieldPos(index);
+      // return (bit_set[field_id] >> pos_id) & 255;
     }
 
     /// Set the full byte starting at the bit at the specified index.
@@ -1356,13 +1364,12 @@ namespace std
     {
         size_t operator()( const emp::BitSet<N>& bs ) const
         {
-          //  static const uint32_t NUM_BYTES = 1 + ((bs.GetSize() - 1) >> 3);
-          //  size_t result = bs.GetByte(0);
-          //  for (unsigned int i = 1; i < NUM_BYTES; ++i){
-          //       result = emp::hash_combine(result, bs.GetByte(i));
-          //  }
-          //  return result;
-          return 0;
+           static const uint32_t NUM_BYTES = 1 + ((bs.GetSize() - 1) >> 3);
+           size_t result = bs.GetByte(0);
+           for (unsigned int i = 1; i < NUM_BYTES; ++i){
+                result = emp::hash_combine(result, bs.GetByte(i));
+           }
+           return result;
         }
     };
 }
