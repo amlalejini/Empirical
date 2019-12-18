@@ -576,7 +576,7 @@ namespace emp {
 
     uint8_t GetByte(size_t index) const {
       emp_assert(index < NUM_BYTES);
-      return reinterpret_cast<unsigned char *>(bit_set)[index];
+      return reinterpret_cast<const unsigned char *>(bit_set)[index];
       // const size_t field_id = Byte2Field(index);
       // const size_t pos_id = Byte2FieldPos(index);
       // return (bit_set[field_id] >> pos_id) & 255;
