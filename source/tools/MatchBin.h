@@ -220,6 +220,9 @@ namespace emp {
       // verify that matches makes sense
       for (auto & uid : state.uids) {
         emp_assert(emp::Has(state.tags, uid));
+        if (!emp::Has(matches, state.tags.at(uid))) {
+          state.tags.at(uid).Print();
+        }
         emp_assert(emp::Has(matches, state.tags.at(uid)), uid);
       }
 
