@@ -209,12 +209,15 @@ namespace emp {
 
       // compute distance between query and all stored tags
       std::unordered_map<tag_t, double> matches;
-      // for (const auto &[uid, tag] : state.tags) {
-      for (const auto & tag : state.tags) {
-        if (matches.find(tag.second) == std::end(matches)) {
-          matches[tag.second] = metric(query, tag.second);
+      for (const auto &[uid, tag] : state.tags) {
+        // if (matches.find(tag) == std::end(matches)) {
+        if (matches.find(tag) == matches.end()) {
+          matches[tag] = metric(query, tag);
         }
       }
+
+      // // verify that matches makes sense
+      // for
 
       // apply regulation to generate match scores
       std::unordered_map<uid_t, double> scores;
