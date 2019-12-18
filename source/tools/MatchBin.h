@@ -220,6 +220,8 @@ namespace emp {
       //  Len(uids) == Len(regulators) == len(tags)
       emp_assert(state.uids.size() == state.regulators.size(), "Size mismatch!", state.uids.size(), state.regulators.size());
       emp_assert(state.uids.size() == state.tags.size(), "Size mismatch!", state.uids.size(), state.tags.size());
+      emp_assert(emp::Has(state.tags, uid), "uid not in state.tags");
+      emp_assert(emp::Has(matches, state.tags.at(uid)));
       for (const auto & uid : state.uids) {
         scores[uid] = state.regulators.at(uid)(
           matches.at( state.tags.at(uid) )
