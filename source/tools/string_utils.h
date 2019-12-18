@@ -600,7 +600,7 @@ namespace emp {
     in_string.resize(pos);
   }
 
-  /// Make a string safe(r) 
+  /// Make a string safe(r)
   static std::string slugify(const std::string & in_string) {
     //TODO handle complicated unicode strings
     std::string res = to_lower(in_string);
@@ -892,10 +892,10 @@ namespace emp {
     }
   }
 
-  inline int count(std::string s, const char val) {
-    // From https://stackoverflow.com/a/3871346/1560599
-    return std::count(s.begin(), s.end(), val);
-  }
+  // inline int count(std::string s, const char val) {
+  //   // From https://stackoverflow.com/a/3871346/1560599
+  //   return std::count(s.begin(), s.end(), val);
+  // }
 
   }
 
