@@ -211,14 +211,17 @@ namespace emp {
 
       // compute distance between query and all stored tags
       std::unordered_map<tag_t, double> matches;
+      std::unordered_set<tag_t> tags_set;
       for (const auto &[uid, tag] : state.tags) {
         if (!emp::Has(matches, tag)) {
         // if (matches.find(tag) == std::end(matches)) {
           matches[tag] = metric(query, tag);
         }
         emp_assert(emp::Has(matches, tag));
+        tags_set.emplace(tag);
       }
       // somehow matches gets fucked?
+      emp_assert(tags_set.size() == matches.size());
       emp_assert(state.uids.size() == state.tags.size(), "Size mismatch!", state.uids.size(), state.tags.size());
       for (const auto &[uid, tag] : state.tags) {
         emp_assert(emp::Has(state.uids, uid));    // state.uids has uid associated with this tag
