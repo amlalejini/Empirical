@@ -210,14 +210,18 @@ namespace emp {
       // compute distance between query and all stored tags
       std::unordered_map<tag_t, double> matches;
       for (const auto &[uid, tag] : state.tags) {
-        // if (matches.find(tag) == std::end(matches)) {
-        if (matches.find(tag) == matches.end()) {
+        if (matches.find(tag) == std::end(matches)) {
           matches[tag] = metric(query, tag);
         }
       }
 
-      // // verify that matches makes sense
-      // for
+      // verify that matches makes sense
+      for (auto & val : state.tags) {
+        emp_assert(emp::Has(matches, val.second));
+      }
+      for (auto & uid : state.uids) {
+        emp_assert(emp::Has(state.tags, uid));
+      }
 
       // apply regulation to generate match scores
       std::unordered_map<uid_t, double> scores;
