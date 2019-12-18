@@ -214,6 +214,7 @@ namespace emp {
         // if (matches.find(tag) == std::end(matches)) {
           matches[tag] = metric(query, tag);
         }
+        emp_assert(emp::Has(matches, tag));
       }
 
       // verify that matches makes sense
@@ -221,9 +222,9 @@ namespace emp {
         emp_assert(emp::Has(state.tags, uid));
       }
 
-      for (auto & val : state.tags) {
-        emp_assert(emp::Has(matches, val.second));
-      }
+      // for (auto & val : state.tags) {
+      //   emp_assert(emp::Has(matches, val.second));
+      // }
 
       // apply regulation to generate match scores
       std::unordered_map<uid_t, double> scores;
