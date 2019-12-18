@@ -216,11 +216,12 @@ namespace emp {
       }
 
       // verify that matches makes sense
-      for (auto & val : state.tags) {
-        emp_assert(emp::Has(matches, val.second));
-      }
       for (auto & uid : state.uids) {
         emp_assert(emp::Has(state.tags, uid));
+      }
+
+      for (auto & val : state.tags) {
+        emp_assert(emp::Has(matches, val.second));
       }
 
       // apply regulation to generate match scores
