@@ -217,13 +217,21 @@ namespace emp {
         emp_assert(emp::Has(matches, tag));
       }
 
+      emp_assert(state.uids.size() == state.tags.size(), "Size mismatch!", state.uids.size(), state.tags.size());
+      for (const auto &[uid, tag] : state.tags) {
+        emp_assert(emp::Has(matches, tag));       // Matches has tag associated with this UID
+        emp_assert(emp::Has(state.uids, uid));    // state.uids has uid associated with this tag
+        emp_assert(emp::Has(state.tags, uid));    // state.tags has uid
+        emp_assert(tag == state.tags.at(uid), tag, state.tags.at(uid));
+      }
+
       // verify that matches makes sense
       for (auto & uid : state.uids) {
         emp_assert(emp::Has(state.tags, uid));
         if (!emp::Has(matches, state.tags.at(uid))) {
           state.tags.at(uid).Print();
         }
-        emp_assert(emp::Has(matches, state.tags.at(uid)), uid);
+        emp_assert(emp::Has(matches, state.tags.at(uid)), uid); // This fails!
       }
 
       // for (auto & val : state.tags) {
