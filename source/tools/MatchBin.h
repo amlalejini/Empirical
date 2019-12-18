@@ -27,6 +27,8 @@
 #include "../tools/IndexMap.h"
 #include "../tools/BitSet.h"
 #include "../tools/matchbin_utils.h"
+#include "../tools/vector_utils.h"
+#include "../tools/map_utils.h"
 
 namespace emp {
 
