@@ -209,9 +209,10 @@ namespace emp {
 
       // compute distance between query and all stored tags
       std::unordered_map<tag_t, double> matches;
-      for (const auto &[uid, tag] : state.tags) {
-        if (matches.find(tag) == std::end(matches)) {
-          matches[tag] = metric(query, tag);
+      // for (const auto &[uid, tag] : state.tags) {
+      for (const auto & tag : state.tags) {
+        if (matches.find(tag.second) == std::end(matches)) {
+          matches[tag.second] = metric(query, tag.second);
         }
       }
 
