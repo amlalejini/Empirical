@@ -8,7 +8,7 @@
  *  @note Status: RELEASE
  *
  *  Compile with -O3 and -msse4.2 for fast bit counting.
- * 
+ *
  *  @todo Do small BitVector optimization.  Currently we have number of bits (8 bytes) and a
  *        pointer to the memory for the bitset (another 8 bytes), but we could use those 16 bytes
  *        as 1 byte of size info followed by 15 bytes of bitset (120 bits!)
@@ -466,6 +466,21 @@ namespace emp {
 
       const size_t field_id = index/2;
       const size_t field_pos = 1 - (index & 1);
+      const field_t mask = ((field_t) ((uint32_t) -1)) << (1-field_pos);
+
+      emp_assert(field_id < NumFields());
+
+      bit_set[field_id] &= mask;   // Clear out bits that we are setting.
+      bit_set[field_id] |= ((field_t) value) << (field_pos * 32);
+    }
+
+    void SetUIntAtBit(size_t index, uint32_t value) {
+      // if constexpr (sizeof(field_t) == 4) bit_set[index] = value;
+
+      emp_assert(sizeof(field_t) == 8);
+
+      const size_t field_id = FieldID(index);
+      const size_t field_pos = FieldPos(index);
       const field_t mask = ((field_t) ((uint32_t) -1)) << (1-field_pos);
 
       emp_assert(field_id < NumFields());
