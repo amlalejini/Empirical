@@ -154,6 +154,7 @@ namespace emp {
 	    return GetFitness(n, cur_val);
     }
 
+    const emp::vector< emp::vector<double> > & GetLandscape() const { return landscape; };
 
     void SetState(size_t n, size_t state, double in_fit) { landscape[n][state] = in_fit; }
 
