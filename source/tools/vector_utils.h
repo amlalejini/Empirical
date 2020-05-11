@@ -6,6 +6,9 @@
  *  @file vector_utils.h
  *  @brief A set of simple functions to manipulate emp::vector
  *  @note Status: BETA
+ * 
+ * 
+ *  @note consider adding a work-around to avoid vector<bool> ?
  */
 
 #ifndef EMP_VECTOR_UTILS_H
@@ -141,6 +144,10 @@ namespace emp {
     return sum;
   }
 
+  /// Calculate the average value in a vector.
+  template <typename T>
+  T CalcMean(const emp::vector<T> & v) { return Sum(v) / (T) v.size(); }
+
   /// Multiply all of the contents of a vector.
   template <typename T>
   T Product(const emp::vector<T> & v) {
@@ -221,7 +228,7 @@ namespace emp {
     const size_t id_right = tree_right(id);
     if (id_right < v.size()) {
       const T val_right = v[id_right];
-      if (val_right > val_left && val_right > val) {
+      if (val_left < val_right && val < val_right) {
         v[id] = val_right;
         v[id_right] = val;
         Heapify(v, id_right);
@@ -229,7 +236,7 @@ namespace emp {
       }
     }
 
-    if (val_left > val) {
+    if (val < val_left) {
       v[id] = val_left;
       v[id_left] = val;
       Heapify(v, id_left);
@@ -265,10 +272,12 @@ namespace emp {
   template <typename T>
   void HeapInsert(emp::vector<T> & v, T val) {
     size_t pos = v.size();
+    size_t ppos = tree_parent(pos);
     v.push_back(val);
-    while (pos > 0) {
-      pos = tree_parent(pos);
-      if (!Heapify(v,pos)) break;
+    while (pos > 0 && v[ppos] < v[pos]) {
+      std::swap(v[pos], v[ppos]);
+      pos = ppos;
+      ppos = tree_parent(pos);
     }
   }
 
