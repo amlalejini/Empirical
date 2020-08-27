@@ -219,12 +219,12 @@ namespace emp {
         info.name += ">";
       }
     }
-    
+
     return info;
   }
 
   /// Setup a bunch of standard type names to be more readable.
-  void SetupTypeNames() {
+  inline void SetupTypeNames() {
 
     // Built-in types.
     GetTypeID<void>().SetName("void");
