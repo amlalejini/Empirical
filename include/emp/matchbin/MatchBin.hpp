@@ -698,6 +698,29 @@ namespace emp {
 
       return result;
     }
+
+    /// Compute a given query's match score against all stored tags.
+    std::unordered_map<uid_t, double> ComputeMatchScores(
+      const query_t & query
+    ) {
+      // compute distance between query and all stored tags
+      std::unordered_map<tag_t, double> matches;
+      for (const auto &[uid, tag] : state.tags) {
+        if (matches.find(tag) == std::end(matches)) {
+          matches[tag] = metric(query, tag);
+        }
+      }
+
+      // apply regulation to generate match scores
+      std::unordered_map<uid_t, double> scores;
+      for (const auto & uid : state.uids) {
+        scores[uid] = state.regulators.at(uid)(
+          matches.at( state.tags.at(uid) )
+        );
+      }
+      return scores;
+    }
+
     /// Put an item and associated tag in the container. Returns the uid for
     /// that entry.
     uid_t Put(const Val & v, const tag_t & t) override {
