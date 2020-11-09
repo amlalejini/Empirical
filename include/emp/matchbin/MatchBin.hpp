@@ -703,21 +703,18 @@ namespace emp {
     std::unordered_map<uid_t, double> ComputeMatchScores(
       const query_t & query
     ) {
-      // compute distance between query and all stored tags
-      std::unordered_map<tag_t, double> matches;
-      for (const auto &[uid, tag] : state.tags) {
-        if (matches.find(tag) == std::end(matches)) {
-          matches[tag] = metric(query, tag);
-        }
-      }
 
-      // apply regulation to generate match scores
       std::unordered_map<uid_t, double> scores;
-      for (const auto & uid : state.uids) {
-        scores[uid] = state.regulators.at(uid)(
-          matches.at( state.tags.at(uid) )
-        );
-      }
+
+      std::for_each(
+        std::begin(state.data),
+        std::end(state.data),
+        [&](const auto& pair){
+          const auto& [uid, pack] = pair;
+          scores[uid] = pack.regulator( metric(query, pack.tag) );
+        }
+      );
+
       return scores;
     }
 
