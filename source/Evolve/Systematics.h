@@ -147,7 +147,7 @@ namespace emp {
     Taxon(size_t _id, const info_t & _info, Ptr<this_t> _parent=nullptr)
      : id (_id), info(_info), parent(_parent)
      , num_orgs(0), tot_orgs(0), num_offspring(0), total_offspring(0)
-     , depth(parent ? (parent->depth+1) : 0) 
+     , depth(parent ? (parent->depth+1) : 0)
      , destruction_time(std::numeric_limits<double>::infinity()) { ; }
     // Taxon(const Taxon &) = delete;
     Taxon(const Taxon &) = default; // TODO: Check with Charles about this
@@ -198,9 +198,9 @@ namespace emp {
     void AddOrg() { ++num_orgs; ++tot_orgs; }
 
     /// Add a new offspring Taxon to this one.
-    void AddOffspring(Ptr<this_t> offspring_tax) { 
-      ++num_offspring; 
-      offspring.insert(offspring_tax); 
+    void AddOffspring(Ptr<this_t> offspring_tax) {
+      ++num_offspring;
+      offspring.insert(offspring_tax);
       AddTotalOffspring();
     }
 
@@ -382,7 +382,7 @@ namespace emp {
     virtual double GetVariancePairwiseDistance(bool branch_only) const = 0;
     virtual emp::vector<double> GetPairwiseDistances(bool branch_only) const = 0;
     virtual int SackinIndex() const = 0;
-    virtual double CollessLikeIndex() const = 0;    
+    virtual double CollessLikeIndex() const = 0;
     virtual int GetMRCADepth() const = 0;
     virtual void AddOrg(ORG && org, WorldPosition pos, int update) = 0;
     virtual void AddOrg(ORG & org, WorldPosition pos, int update) = 0;
@@ -408,7 +408,7 @@ namespace emp {
   class Systematics : public SystematicsBase<ORG> {
   private:
     using parent_t = SystematicsBase<ORG>;
-  public: 
+  public:
     using taxon_t = Taxon<ORG_INFO, DATA_STRUCT>;
     using info_t = ORG_INFO;
   private:
@@ -481,7 +481,7 @@ namespace emp {
       std::string key;
       std::string desc;
 
-      SnapshotInfo(const snapshot_fun_t & _fun, const std::string & _key, const std::string & _desc="") 
+      SnapshotInfo(const snapshot_fun_t & _fun, const std::string & _key, const std::string & _desc="")
         : fun(_fun),
           key(_key),
           desc(_desc)
@@ -515,7 +515,7 @@ namespace emp {
     /// Called when there are no more living members of a taxon.  There may be descendants.
     void MarkExtinct(Ptr<taxon_t> taxon, int time=-1);
 
-    
+
 
   public:
 
@@ -567,7 +567,7 @@ namespace emp {
     const std::unordered_set< Ptr<taxon_t>, hash_t > & GetActive() const { return active_taxa; }
     const std::unordered_set< Ptr<taxon_t>, hash_t > & GetAncestors() const { return ancestor_taxa; }
     const std::unordered_set< Ptr<taxon_t>, hash_t > & GetOutside() const { return outside_taxa; }
-  
+
     /// How many taxa are still active in the population?
     size_t GetNumActive() const { return active_taxa.size(); }
 
@@ -587,7 +587,7 @@ namespace emp {
       if (max_depth != -1) {
         return max_depth;
       }
-      
+
       for (auto tax : active_taxa) {
         int depth = tax->GetDepth();
         if (depth > max_depth) {
@@ -772,10 +772,10 @@ namespace emp {
     /// set of functions, all user-added snapshot functions are run. Functions
     /// take a reference to a taxon as input and return the string to be dumped
     /// in the file at the given key.
-    void AddSnapshotFun(const std::function<std::string(const taxon_t &)> & fun, 
+    void AddSnapshotFun(const std::function<std::string(const taxon_t &)> & fun,
                         const std::string & key, const std::string & desc="") {
       user_snapshot_funs.emplace_back(fun, key, desc);
-    } 
+    }
 
     bool IsTaxonAt(int id) {
       emp_assert(id < (int) taxon_locations.size(), "Invalid taxon location", id, taxon_locations.size());
@@ -1039,9 +1039,9 @@ namespace emp {
     }
 
 
-    /** 
+    /**
      * Returns a vector containing all taxa from @param time_point that were
-     *  
+     *
      * */
     std::set<Ptr<taxon_t>> GetCanopyExtantRoots(int time_point = 0) const {
       // NOTE: This could be made faster by doing something similar to the pairwise distance
@@ -1251,7 +1251,7 @@ namespace emp {
 
     CollessStruct RecursiveCollessStep(Ptr<taxon_t> curr) const {
       CollessStruct result;
-      
+
       while (curr->GetNumOff() == 1) {
         curr = *(curr->GetOffspring().begin());
       }
@@ -1285,7 +1285,7 @@ namespace emp {
 
     /** Calculate Colless Index of this tree (Colless, 1982; reviewed in Shao, 1990).
      * Measures tree balance. The standard Colless index only works for bifurcating trees,
-     * so this will be a Colless-like Index, as suggested in 
+     * so this will be a Colless-like Index, as suggested in
      * "Sound Colless-like balance indices for multifurcating trees" (Mir, 2018, PLoS One)
     */
     double CollessLikeIndex() const {
@@ -1294,10 +1294,10 @@ namespace emp {
       return RecursiveCollessStep(mrca).total;
     }
 
-    
+
 
     void RemoveBefore(int ud) {
-      
+
       // @ELD: This would be such a nice way to do it
       // but we can't because we need to notify offspring
       // when their parents are un-tracked
@@ -1319,7 +1319,7 @@ namespace emp {
         Ptr<taxon_t> curr = tax;
 
         while (curr && !CanRemove(curr->GetParent(), ud)) {
-          curr = curr->GetParent();           
+          curr = curr->GetParent();
         }
 
         if (curr) {
@@ -1341,7 +1341,7 @@ namespace emp {
           }
           ancestor_taxa.erase(el.first);
           el.first.Delete();
-        } 
+        }
       }
 
     }
@@ -1360,7 +1360,7 @@ namespace emp {
     }
 
     /// Request a pointer to the Most-Recent Common Ancestor for the population.
-    Ptr<taxon_t> GetMRCA() const;
+    Ptr<taxon_t> GetMRCA(bool force=false) const;
 
     /// Request the depth of the Most-Recent Common Ancestor; return -1 for none.
     int GetMRCADepth() const;
@@ -1434,7 +1434,7 @@ namespace emp {
 
     // If the taxon is still active AND the is the current mrca AND now has only one offspring,
     // clear the MRCA for lazy re-evaluation later.
-    else if (taxon == mrca && taxon->GetNumOff() == 1) mrca = nullptr;
+    else if (taxon == mrca && taxon->GetNumOff() == 1) { mrca = nullptr; }
   }
 
   // Mark a taxon extinct if there are no more living members.  There may be descendants.
@@ -1468,15 +1468,15 @@ namespace emp {
 
     if (store_ancestors) {
       ancestor_taxa.insert(taxon);  // Move taxon to ancestors...
-    } 
+    }
     if (taxon->GetNumOff() == 0) Prune(taxon);         // ...and prune from there if needed.
   }
 
 
   // Request a pointer to the Most-Recent Common Ancestor for the population.
   template <typename ORG, typename ORG_INFO, typename DATA_STRUCT>
-  Ptr<typename Systematics<ORG, ORG_INFO, DATA_STRUCT>::taxon_t> Systematics<ORG, ORG_INFO, DATA_STRUCT>::GetMRCA() const {
-    if (!mrca && num_roots == 1) {  // Determine if we need to calculate the MRCA.
+  Ptr<typename Systematics<ORG, ORG_INFO, DATA_STRUCT>::taxon_t> Systematics<ORG, ORG_INFO, DATA_STRUCT>::GetMRCA(bool force) const {
+    if ( (!mrca && num_roots == 1) || force) {  // Determine if we need to calculate the MRCA.
       // First, find a candidate among the living taxa.  Only taxa that have one offsrping
       // can be on the line-of-descent to the MRCA, so anything else is a good start point.
       // There must be at least one!  Stop as soon as we find a candidate.
@@ -1543,7 +1543,7 @@ namespace emp {
   template <typename ORG, typename ORG_INFO, typename DATA_STRUCT>
   Ptr<typename Systematics<ORG, ORG_INFO, DATA_STRUCT>::taxon_t>
   Systematics<ORG, ORG_INFO, DATA_STRUCT>::AddOrg(ORG && org, Ptr<taxon_t> parent, int update) {
-    emp_assert(!store_position && 
+    emp_assert(!store_position &&
               "Trying to add org to position-tracking systematics manager without position. Either specify a valid position or turn of position tracking for systematic manager.", store_position);
     return AddOrg(org, WorldPosition::invalid_id, parent, update);
   }
@@ -1606,8 +1606,8 @@ namespace emp {
     if (to_be_removed) {
       RemoveOrg(to_be_removed, removal_time);
       to_be_removed = nullptr;
-    } 
-    
+    }
+
     most_recent = cur_taxon;
     return cur_taxon;                       // Return the taxon used.
   }
@@ -1615,7 +1615,7 @@ namespace emp {
   template <typename ORG, typename ORG_INFO, typename DATA_STRUCT>
   void Systematics<ORG, ORG_INFO, DATA_STRUCT>::RemoveOrgAfterRepro(WorldPosition pos, int time) {
     emp_assert(store_position, "Trying to remove org based on position from systematics manager that doesn't track it.");
-    
+
     if (pos.GetIndex() >= taxon_locations.size() || !taxon_locations[pos.GetIndex()]) {
       // There's not actually a taxon here
       return;
@@ -1624,7 +1624,7 @@ namespace emp {
     RemoveOrgAfterRepro(taxon_locations[pos.GetIndex()], time);
     removal_pos = pos.GetIndex();
   }
-  
+
   template <typename ORG, typename ORG_INFO, typename DATA_STRUCT>
   void Systematics<ORG, ORG_INFO, DATA_STRUCT>::RemoveOrgAfterRepro(Ptr<taxon_t> taxon, int time) {
     if (to_be_removed != nullptr) {
@@ -1643,7 +1643,7 @@ namespace emp {
   template <typename ORG, typename ORG_INFO, typename DATA_STRUCT>
   bool Systematics<ORG, ORG_INFO, DATA_STRUCT>::RemoveOrg(WorldPosition pos, int time) {
     emp_assert(store_position, "Trying to remove org based on position from systematics manager that doesn't track it.");
- 
+
     if (pos.GetPopID() == 0) {
       emp_assert(pos.GetIndex() < taxon_locations.size(), "Invalid position requested for removal", pos.GetIndex(), taxon_locations.size());
       bool active = false;
@@ -1744,7 +1744,7 @@ namespace emp {
 
     //  - ancestor_list: ancestor list for taxon
     std::function<std::string()> get_ancestor_list = [&cur_taxon]() -> std::string {
-      if (cur_taxon->GetParent() == nullptr) { return "[NONE]"; } 
+      if (cur_taxon->GetParent() == nullptr) { return "[NONE]"; }
       return "[" + to_string(cur_taxon->GetParent()->GetID()) + "]";
     };
     file.AddFun(get_ancestor_list, "ancestor_list", "Ancestor list for this taxon.");
@@ -1797,8 +1797,8 @@ namespace emp {
         return user_snapshot_funs[i].fun(*cur_taxon);
       });
     }
-    
-    // Need to add file functions after wrapping to preserve integrity of 
+
+    // Need to add file functions after wrapping to preserve integrity of
     // function reference being passed to the data file object.
     for (size_t i = 0; i < user_snapshot_funs.size(); ++i) {
       file.AddFun(wrapped_user_funs[i], user_snapshot_funs[i].key, user_snapshot_funs[i].desc);
