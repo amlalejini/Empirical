@@ -1250,7 +1250,7 @@ namespace emp {
     }
 
     /// @returns a pointer to the Most-Recent Common Ancestor for the population.
-    Ptr<taxon_t> GetMRCA() const;
+    Ptr<taxon_t> GetMRCA(bool force_recalc=false) const;
 
     /// @returns the depth of the Most-Recent Common Ancestor; return -1 for none.
     int GetMRCADepth() const;
@@ -1814,8 +1814,8 @@ namespace emp {
 
   // @returns a pointer to the Most-Recent Common Ancestor for the population or null pointer if there isn't one
   template <typename ORG, typename ORG_INFO, typename DATA_STRUCT>
-  Ptr<typename Systematics<ORG, ORG_INFO, DATA_STRUCT>::taxon_t> Systematics<ORG, ORG_INFO, DATA_STRUCT>::GetMRCA() const {
-    if (!mrca && num_roots == 1) {  // Determine if we need to calculate the MRCA.
+  Ptr<typename Systematics<ORG, ORG_INFO, DATA_STRUCT>::taxon_t> Systematics<ORG, ORG_INFO, DATA_STRUCT>::GetMRCA(bool force_recalc) const {
+    if ((!mrca && num_roots == 1) || force_recalc) {  // Determine if we need to calculate the MRCA.
       // First, find a candidate among the living taxa.  Only taxa that have one offsrping
       // can be on the line-of-descent to the MRCA, so anything else is a good start point.
       // There must be at least one!  Stop as soon as we find a candidate.
